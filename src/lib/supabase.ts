@@ -1,8 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 
 // Use hardcoded values if environment variables are not available
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://espcgyteztrqzfarqafq.supabase.co';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVzcGNneXRlenRycXpmYXJxYWZxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDU1NDE3MjUsImV4cCI6MjA2MTExNzcyNX0.gANfSCZWmJGDXY3alVTW8sBV8UeVvxRa-S2xLcWvOOs';
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://gojjygkkwyhszodxfiew.supabase.co';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdvamp5Z2trd3loc3pvZHhmaWV3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDg1ODIyOTMsImV4cCI6MjA2NDE1ODI5M30.5SlV-wBTPA-odHf1kYb4OifrxVAKJNb2EyCNZkU3JE4';
 
 console.log('Supabase URL:', supabaseUrl);
 console.log('Supabase Key:', supabaseAnonKey ? 'Key is set' : 'Key is missing');
@@ -14,6 +14,8 @@ export type Student = {
   name: string;
   email: string;
   barcode: string;
+  table_number?: string;
+  seat_number?: string;
   checked_in: boolean;
   checked_in_at?: string;
   created_at: string;
@@ -67,7 +69,7 @@ export async function checkInStudent(id: string) {
   return data as Student;
 }
 
-export async function createStudent(name: string, email: string, barcode: string) {
+export async function createStudent(name: string, email: string, barcode: string, tableNumber?: string, seatNumber?: string) {
   try {
     console.log('Creating student:', { name, email, barcode });
 
@@ -100,6 +102,8 @@ export async function createStudent(name: string, email: string, barcode: string
           name,
           email,
           barcode,
+          table_number: tableNumber,
+          seat_number: seatNumber,
           checked_in: false
         }
       ])
@@ -153,7 +157,7 @@ export async function checkEmailExists(email: string): Promise<boolean> {
   }
 }
 
-export async function updateStudent(id: string, updates: { name?: string; email?: string }) {
+export async function updateStudent(id: string, updates: { name?: string; email?: string; table_number?: string; seat_number?: string }) {
   try {
     console.log('Updating student:', { id, ...updates });
 

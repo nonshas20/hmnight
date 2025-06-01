@@ -4,6 +4,8 @@ CREATE TABLE students (
   name TEXT NOT NULL,
   email TEXT NOT NULL,
   barcode TEXT NOT NULL UNIQUE,
+  table_number TEXT,
+  seat_number TEXT,
   checked_in BOOLEAN DEFAULT FALSE,
   checked_in_at TIMESTAMP WITH TIME ZONE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()

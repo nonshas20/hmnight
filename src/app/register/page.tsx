@@ -4,14 +4,20 @@ import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { generateBarcodeValue } from '@/utils/barcode';
 import { createStudent, checkEmailExists } from '@/lib/supabase';
 import { useAppStore } from '@/lib/store';
+import { useAuth } from '@/contexts/AuthContext';
+
+
 
 type FormData = {
   name: string;
   email: string;
+  tableNumber: string;
+  seatNumber: string;
 };
 
 export default function RegisterPage() {
@@ -19,9 +25,19 @@ export default function RegisterPage() {
   const [registeredStudent, setRegisteredStudent] = useState<any>(null);
   const [barcodeUrl, setBarcodeUrl] = useState<string>('');
   const [compositeTicketUrl, setCompositeTicketUrl] = useState<string>('');
+  const [isTicketExpanded, setIsTicketExpanded] = useState(false);
+
   const addStudent = useAppStore((state) => state.addStudent);
+  const { isLoggedIn, loading } = useAuth();
+  const router = useRouter();
 
   const { register, handleSubmit, formState: { errors }, reset } = useForm<FormData>();
+
+  useEffect(() => {
+    if (!loading && !isLoggedIn) {
+      router.push('/login');
+    }
+  }, [isLoggedIn, loading, router]);
 
   // Generate composite ticket when barcode is available
   useEffect(() => {
@@ -43,6 +59,30 @@ export default function RegisterPage() {
     generateCompositeTicket();
   }, [barcodeUrl, registeredStudent]);
 
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-light via-background to-secondary-light">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary border-t-transparent mx-auto mb-4"></div>
+          <h2 className="text-2xl font-bold mb-4">Loading...</h2>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isLoggedIn) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-light via-background to-secondary-light">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold mb-4">Please sign in to register students</h2>
+          <Link href="/login" className="btn-primary">
+            Sign In
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   const onSubmit = async (data: FormData) => {
     setIsSubmitting(true);
 
@@ -59,10 +99,10 @@ export default function RegisterPage() {
       // Generate a unique barcode
       const barcodeValue = generateBarcodeValue();
 
-      console.log('Registering student:', data.name, data.email, barcodeValue);
+      console.log('Registering student:', data.name, data.email, barcodeValue, data.tableNumber, data.seatNumber);
 
       // Create student in database
-      const student = await createStudent(data.name, data.email, barcodeValue);
+      const student = await createStudent(data.name, data.email, barcodeValue, data.tableNumber, data.seatNumber);
 
       if (student) {
         console.log('Student registered successfully:', student);
@@ -76,6 +116,7 @@ export default function RegisterPage() {
           const { generateBarcodeDataUrl } = await import('@/utils/barcode');
           const dataUrl = await generateBarcodeDataUrl(barcodeValue);
           console.log('Barcode generated successfully');
+          console.log('Barcode value:', barcodeValue);
           setBarcodeUrl(dataUrl);
         } catch (error) {
           console.error('Error generating barcode:', error);
@@ -103,17 +144,19 @@ export default function RegisterPage() {
   };
 
   const handleSendEmail = async () => {
-    if (!registeredStudent || !barcodeUrl) return;
+    if (!registeredStudent) return;
 
     try {
       toast.loading('Sending email...');
 
-      // Generate ticket with barcode
-      const { generateTicketWithBarcode } = await import('@/utils/barcode');
-      const ticketUrl = await generateTicketWithBarcode(
-        registeredStudent,
-        barcodeUrl
-      );
+      // Use the already generated composite ticket URL if available, otherwise use the barcode URL
+      const ticketUrl = compositeTicketUrl || barcodeUrl;
+
+      if (!ticketUrl) {
+        toast.dismiss();
+        toast.error('Ticket not ready yet. Please wait a moment and try again.');
+        return;
+      }
 
       // Send email with ticket
       const response = await fetch('/api/send-ticket', {
@@ -129,7 +172,7 @@ export default function RegisterPage() {
 
       if (response.ok) {
         toast.dismiss();
-        toast.success('Ticket sent to student\'s email');
+        toast.success('Ticket sent successfully! 📧');
       } else {
         toast.dismiss();
         toast.error('Failed to send email');
@@ -145,6 +188,15 @@ export default function RegisterPage() {
     setRegisteredStudent(null);
     setBarcodeUrl('');
     setCompositeTicketUrl('');
+    setIsTicketExpanded(false);
+  };
+
+  const handleTicketClick = () => {
+    setIsTicketExpanded(true);
+  };
+
+  const handleCloseExpandedTicket = () => {
+    setIsTicketExpanded(false);
   };
 
   return (
@@ -254,6 +306,56 @@ export default function RegisterPage() {
                     )}
                   </motion.div>
 
+                  <motion.div
+                    initial={{ x: -20, opacity: 0 }}
+                    animate={{ x: 0, opacity: 1 }}
+                    transition={{ delay: 0.3 }}
+                  >
+                    <label htmlFor="tableNumber" className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Table Number
+                    </label>
+                    <input
+                      id="tableNumber"
+                      type="text"
+                      className="input-field bg-white/80 dark:bg-gray-800/80 border-2 border-gray-300 dark:border-gray-700 py-3 text-lg shadow-sm focus:ring-4"
+                      placeholder="Enter table number (e.g., T1, T2, etc.)"
+                      {...register('tableNumber', { required: 'Table number is required' })}
+                    />
+                    {errors.tableNumber && (
+                      <p className="mt-2 text-sm font-medium text-red-600 flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        {errors.tableNumber.message}
+                      </p>
+                    )}
+                  </motion.div>
+
+                  <motion.div
+                    initial={{ x: -20, opacity: 0 }}
+                    animate={{ x: 0, opacity: 1 }}
+                    transition={{ delay: 0.4 }}
+                  >
+                    <label htmlFor="seatNumber" className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Seat Number
+                    </label>
+                    <input
+                      id="seatNumber"
+                      type="text"
+                      className="input-field bg-white/80 dark:bg-gray-800/80 border-2 border-gray-300 dark:border-gray-700 py-3 text-lg shadow-sm focus:ring-4"
+                      placeholder="Enter seat number (e.g., S1, S2, etc.)"
+                      {...register('seatNumber', { required: 'Seat number is required' })}
+                    />
+                    {errors.seatNumber && (
+                      <p className="mt-2 text-sm font-medium text-red-600 flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        {errors.seatNumber.message}
+                      </p>
+                    )}
+                  </motion.div>
+
                   <motion.button
                     type="submit"
                     className="btn-primary w-full py-3 text-lg font-bold shadow-lg"
@@ -262,7 +364,7 @@ export default function RegisterPage() {
                     whileTap={{ scale: 0.98 }}
                     initial={{ y: 20, opacity: 0 }}
                     animate={{ y: 0, opacity: 1 }}
-                    transition={{ delay: 0.3 }}
+                    transition={{ delay: 0.5 }}
                   >
                     {isSubmitting ? (
                       <span className="flex items-center justify-center">
@@ -338,6 +440,35 @@ export default function RegisterPage() {
                               <p className="font-medium text-gray-800 dark:text-white truncate max-w-[180px]">{registeredStudent.email}</p>
                             </div>
                           </div>
+
+                          {registeredStudent.table_number && (
+                            <div className="flex items-center p-2 rounded-lg bg-white/80 dark:bg-gray-700/80 shadow-sm">
+                              <div className="bg-green-500/10 p-3 rounded-full mr-3">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                                </svg>
+                              </div>
+                              <div className="text-left">
+                                <p className="text-xs text-gray-500 dark:text-gray-400">Table Number</p>
+                                <p className="font-medium text-gray-800 dark:text-white">{registeredStudent.table_number}</p>
+                              </div>
+                            </div>
+                          )}
+
+                          {registeredStudent.seat_number && (
+                            <div className="flex items-center p-2 rounded-lg bg-white/80 dark:bg-gray-700/80 shadow-sm">
+                              <div className="bg-purple-500/10 p-3 rounded-full mr-3">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                </svg>
+                              </div>
+                              <div className="text-left">
+                                <p className="text-xs text-gray-500 dark:text-gray-400">Seat Number</p>
+                                <p className="font-medium text-gray-800 dark:text-white">{registeredStudent.seat_number}</p>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </motion.div>
 
@@ -376,16 +507,27 @@ export default function RegisterPage() {
                           </div>
                           <div className="flex justify-center relative">
                             {compositeTicketUrl ? (
-                              <div className="relative">
+                              <div
+                                className="relative cursor-pointer group"
+                                onClick={handleTicketClick}
+                                title="Click to expand ticket"
+                              >
                                 <img
                                   src={compositeTicketUrl}
                                   alt="HM Gala Ticket with Barcode"
-                                  className="max-w-full h-auto rounded-md shadow-md transform transition-transform duration-300 hover:scale-105"
+                                  className="max-w-full h-auto rounded-md shadow-md transform transition-all duration-300 hover:scale-105 group-hover:shadow-lg"
                                 />
+                                <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 rounded-md transition-all duration-300 flex items-center justify-center">
+                                  <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-white bg-opacity-90 rounded-full p-2">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                                    </svg>
+                                  </div>
+                                </div>
                               </div>
                             ) : (
                               <img
-                                src="/assets/img/hmgalaticket.png"
+                                src={`/assets/img/hmgalaticket.png?v=${Date.now()}`}
                                 alt="HM Gala Ticket"
                                 className="max-w-full h-auto rounded-md shadow-md transform transition-transform duration-300 hover:scale-105"
                               />
@@ -396,6 +538,8 @@ export default function RegisterPage() {
                       </div>
                     </motion.div>
                   </div>
+
+
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6 mb-4">
                     <motion.button
@@ -434,6 +578,32 @@ export default function RegisterPage() {
           </AnimatePresence>
         </div>
       </div>
+
+      {/* Expanded Ticket Modal */}
+      {isTicketExpanded && compositeTicketUrl && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex items-center justify-center p-4">
+          <div className="relative max-w-4xl max-h-full overflow-auto">
+            <button
+              onClick={handleCloseExpandedTicket}
+              className="absolute top-4 right-4 z-10 bg-white bg-opacity-90 hover:bg-opacity-100 text-gray-800 rounded-full p-2 shadow-lg transition-all duration-300 hover:scale-110"
+              title="Close expanded view"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            <img
+              src={compositeTicketUrl}
+              alt="Expanded HM Gala Ticket with Barcode"
+              className="w-full h-auto rounded-lg shadow-2xl"
+              onClick={handleCloseExpandedTicket}
+            />
+            <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-white bg-opacity-90 rounded-full px-4 py-2 shadow-lg">
+              <p className="text-sm text-gray-700 font-medium">Click anywhere to close</p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

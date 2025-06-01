@@ -3,6 +3,7 @@ import { Poppins, Montserrat } from 'next/font/google'
 import '../styles/globals.css'
 import { Toaster } from 'react-hot-toast'
 import Navigation from '@/components/Navigation'
+import { AuthProvider } from '@/contexts/AuthContext'
 
 const poppins = Poppins({
   subsets: ['latin'],
@@ -31,9 +32,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${poppins.variable} ${montserrat.variable} font-sans`}>
-        <Toaster position="top-center" />
-        <Navigation />
-        {children}
+        <AuthProvider>
+          <Toaster position="top-center" />
+          <Navigation />
+          {children}
+        </AuthProvider>
       </body>
     </html>
   )

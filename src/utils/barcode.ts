@@ -20,15 +20,15 @@ export async function generateBarcodeDataUrl(value: string): Promise<string> {
       return;
     }
 
-    // Create a canvas for the horizontal barcode first
+    // Create a canvas for the horizontal barcode first with optimized settings for scanning
     const horizontalCanvas = document.createElement('canvas');
     JsBarcode(horizontalCanvas, value, {
       format: 'CODE128',
-      lineColor: '#E6C068', // Exact gold color extracted from the image you shared
-      width: 2,             // Even thinner bars for a narrower barcode
-      height: 210,          // Further increased height for an even taller barcode after rotation
+      lineColor: '#E6C068', // Gold color for design
+      width: 6,             // Much wider bars for excellent scanning reliability
+      height: 150,          // Increased height for better scanning
       displayValue: false,  // No numbers below
-      margin: 0,            // No margin
+      margin: 20,           // Larger margin for better scanning
       background: '#000000' // Black background
     });
 
@@ -61,8 +61,38 @@ export async function generateBarcodeDataUrl(value: string): Promise<string> {
   });
 }
 
+// Generate a horizontal barcode for better scanning compatibility
+export async function generateHorizontalBarcodeDataUrl(value: string): Promise<string> {
+  return new Promise(async (resolve) => {
+    // Dynamically import JsBarcode only on client side
+    if (!JsBarcode && typeof window !== 'undefined') {
+      JsBarcode = (await import('jsbarcode')).default;
+    }
+
+    if (!JsBarcode) {
+      console.error('JsBarcode not available');
+      resolve('');
+      return;
+    }
+
+    // Create a horizontal barcode optimized for scanning
+    const canvas = document.createElement('canvas');
+    JsBarcode(canvas, value, {
+      format: 'CODE128',
+      lineColor: '#E6C068', // Gold color for design
+      width: 6,             // Wide bars for excellent scanning
+      height: 80,           // Good height for horizontal scanning
+      displayValue: false,  // No numbers below
+      margin: 20,           // Large margin for better scanning
+      background: '#000000' // Black background
+    });
+
+    resolve(canvas.toDataURL('image/png'));
+  });
+}
+
 export function generateTicketWithBarcode(
-  student: { name: string; email: string; barcode: string },
+  student: { name: string; email: string; barcode: string; table_number?: string; seat_number?: string },
   barcodeDataUrl: string,
   templateUrl: string = '/assets/img/hmgalaticket.png'
 ): Promise<string> {
@@ -101,11 +131,46 @@ export function generateTicketWithBarcode(
           barcodeImg.onload = () => {
             try {
               // Calculate barcode position for vertical orientation on the right side of the ticket
-              // Position it to match the ticket design in the image you shared
-              const barcodeWidth = canvas.width * 0.035;  // 3.5% of ticket width (even narrower)
-              const barcodeHeight = canvas.height * 0.7;  // 70% of ticket height (even taller)
-              const barcodeX = canvas.width * 0.9;        // 90% from left (much further right)
-              const barcodeY = canvas.height * 0.15;      // 15% from top (higher placement)
+              // Make the barcode much larger and more prominent
+              const barcodeWidth = canvas.width * 0.08;   // 8% of ticket width (much wider)
+              const barcodeHeight = canvas.height * 0.8;  // 80% of ticket height (taller)
+              const barcodeX = canvas.width * 0.88;       // 88% from left (positioned for visibility)
+              const barcodeY = canvas.height * 0.1;       // 10% from top (centered vertically)
+
+              // Draw table and seat information vertically to the left of the barcode
+              if (student.table_number || student.seat_number) {
+                // Save the current context state
+                ctx.save();
+
+                // Set font properties for the vertical text
+                ctx.fillStyle = '#E6C068'; // Gold color to match barcode
+                ctx.font = 'italic 40px Arial';
+                ctx.textAlign = 'center';
+
+                // Calculate position to the left of the barcode
+                const textX = barcodeX - 30; // 30px to the left of barcode
+                const centerY = barcodeY + (barcodeHeight / 2); // Center vertically with barcode
+
+                // Rotate the context for vertical text (90 degrees counterclockwise)
+                ctx.translate(textX, centerY);
+                ctx.rotate(-Math.PI / 2);
+
+                // Draw table and seat info vertically
+                let textOffset = 0;
+                if (student.table_number && student.seat_number) {
+                  // Both table and seat - draw them with separator
+                  ctx.fillText(`TABLE: ${student.table_number} | SEAT: ${student.seat_number}`, 0, textOffset);
+                } else if (student.table_number) {
+                  // Only table number
+                  ctx.fillText(`TABLE: ${student.table_number}`, 0, textOffset);
+                } else if (student.seat_number) {
+                  // Only seat number
+                  ctx.fillText(`SEAT: ${student.seat_number}`, 0, textOffset);
+                }
+
+                // Restore the context state
+                ctx.restore();
+              }
 
               // Draw the barcode at the calculated position
               ctx.drawImage(
@@ -141,8 +206,8 @@ export function generateTicketWithBarcode(
         resolve('');
       };
 
-      // Load the ticket template image
-      ticketImg.src = templateUrl;
+      // Load the ticket template image with cache busting
+      ticketImg.src = templateUrl + '?v=' + Date.now();
     } catch (e) {
       console.error('Error in generateTicketWithBarcode:', e);
       resolve('');

@@ -8,18 +8,20 @@ export async function PUT(
 ) {
   try {
     const id = params.id;
-    const { name, email } = await request.json();
-    
-    if (!id || (!name && !email)) {
+    const { name, email, table_number, seat_number } = await request.json();
+
+    if (!id || (!name && !email && !table_number && !seat_number)) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
       );
     }
-    
-    const updates: { name?: string; email?: string } = {};
+
+    const updates: { name?: string; email?: string; table_number?: string; seat_number?: string } = {};
     if (name) updates.name = name;
     if (email) updates.email = email;
+    if (table_number) updates.table_number = table_number;
+    if (seat_number) updates.seat_number = seat_number;
     
     const updatedStudent = await updateStudent(id, updates);
     
