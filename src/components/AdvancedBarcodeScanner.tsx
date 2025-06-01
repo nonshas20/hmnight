@@ -70,7 +70,7 @@ export default function AdvancedBarcodeScanner({ onScan, onError, isActive }: Ad
 
       // Start decoding from video device
       await readerRef.current.decodeFromVideoDevice(
-        selectedDeviceId || undefined,
+        selectedDeviceId || null,
         videoRef.current,
         (result, error) => {
           if (result) {
