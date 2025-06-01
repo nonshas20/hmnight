@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { HomeIcon, RegisterIcon, CheckInIcon, DashboardIcon, UserIcon, LogoutIcon, LoginIcon, MenuIcon, CloseIcon } from '@/components/Icons';
 
 export default function Navigation() {
   const [isOpen, setIsOpen] = useState(false);
@@ -80,7 +81,7 @@ export default function Navigation() {
               className="p-2 text-gray-600 dark:text-gray-300 hover:text-primary focus:outline-none"
               aria-label="Toggle menu"
             >
-              {isOpen ? '✕' : '☰'}
+              {isOpen ? <CloseIcon className="h-6 w-6" /> : <MenuIcon className="h-6 w-6" />}
             </button>
           </div>
         </div>
@@ -90,21 +91,26 @@ export default function Navigation() {
         <div className="md:hidden bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
           <div className="px-2 pt-2 pb-3 space-y-1">
             <MobileNavLink href="/" isActive={isActive('/')} onClick={closeMenu}>
-              🏠 Home
+              <HomeIcon className="h-4 w-4 inline mr-2" />
+              Home
             </MobileNavLink>
             {isLoggedIn && (
               <>
                 <MobileNavLink href="/register" isActive={isActive('/register')} onClick={closeMenu}>
-                  📝 Register
+                  <RegisterIcon className="h-4 w-4 inline mr-2" />
+                  Register
                 </MobileNavLink>
                 <MobileNavLink href="/check-in" isActive={isActive('/check-in')} onClick={closeMenu}>
-                  ✅ Check-in
+                  <CheckInIcon className="h-4 w-4 inline mr-2" />
+                  Check-in
                 </MobileNavLink>
                 <MobileNavLink href="/dashboard" isActive={isActive('/dashboard')} onClick={closeMenu}>
-                  📊 Dashboard
+                  <DashboardIcon className="h-4 w-4 inline mr-2" />
+                  Dashboard
                 </MobileNavLink>
                 <MobileNavLink href="/profile" isActive={isActive('/profile')} onClick={closeMenu}>
-                  👤 Profile
+                  <UserIcon className="h-4 w-4 inline mr-2" />
+                  Profile
                 </MobileNavLink>
                 <button
                   onClick={() => {
@@ -113,17 +119,20 @@ export default function Navigation() {
                   }}
                   className="block w-full text-left px-4 py-3 text-base font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-red-500 transition-colors duration-200 border-t border-gray-200 dark:border-gray-700"
                 >
-                  🚪 Sign Out
+                  <LogoutIcon className="h-4 w-4 inline mr-2" />
+                  Sign Out
                 </button>
               </>
             )}
             {!isLoggedIn && (
               <>
                 <MobileNavLink href="/login" isActive={isActive('/login')} onClick={closeMenu}>
-                  🔑 Login
+                  <LoginIcon className="h-4 w-4 inline mr-2" />
+                  Login
                 </MobileNavLink>
                 <MobileNavLink href="/signup" isActive={isActive('/signup')} onClick={closeMenu}>
-                  📝 Sign Up
+                  <RegisterIcon className="h-4 w-4 inline mr-2" />
+                  Sign Up
                 </MobileNavLink>
               </>
             )}

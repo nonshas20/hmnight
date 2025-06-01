@@ -9,6 +9,8 @@ import { useAppStore } from '@/lib/store';
 import { Student } from '@/lib/supabase';
 import AdvancedBarcodeScanner from '@/components/AdvancedBarcodeScanner';
 import { useAuth } from '@/contexts/AuthContext';
+import { CameraIcon, SearchIcon, CheckIcon, XIcon } from '@/components/Icons';
+import { formatTime12Hour } from '@/utils/time';
 
 export default function CheckInPage() {
   const { students, filteredStudents, addStudent, updateStudent, setSearchQuery: setStoreSearchQuery } = useAppStore();
@@ -21,35 +23,12 @@ export default function CheckInPage() {
   const { isLoggedIn, loading } = useAuth();
   const router = useRouter();
 
+  // All useEffect hooks must be at the top, before any conditional returns
   useEffect(() => {
     if (!loading && !isLoggedIn) {
       router.push('/login');
     }
   }, [isLoggedIn, loading, router]);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary border-t-transparent mx-auto mb-4"></div>
-          <h2 className="text-2xl font-bold mb-4">Loading...</h2>
-        </div>
-      </div>
-    );
-  }
-
-  if (!isLoggedIn) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold mb-4">Please sign in to access check-in</h2>
-          <Link href="/login" className="btn-primary">
-            Sign In
-          </Link>
-        </div>
-      </div>
-    );
-  }
 
   useEffect(() => {
     const loadStudents = async () => {
@@ -96,6 +75,30 @@ export default function CheckInPage() {
       }
     };
   }, [searchQuery, setStoreSearchQuery]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary border-t-transparent mx-auto mb-4"></div>
+          <h2 className="text-2xl font-bold mb-4">Loading...</h2>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isLoggedIn) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold mb-4">Please sign in to access check-in</h2>
+          <Link href="/login" className="btn-primary">
+            Sign In
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   const handleScanSuccess = (barcode: string) => {
     console.log('Barcode scanned:', barcode);
@@ -303,24 +306,26 @@ export default function CheckInPage() {
         <div className="flex justify-center mb-8">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-1 border border-gray-200 dark:border-gray-700">
             <button
-              className={`px-6 py-2 rounded text-sm font-medium ${
+              className={`px-6 py-2 rounded text-sm font-medium flex items-center gap-2 ${
                 mode === 'scan'
                   ? 'bg-primary text-white'
                   : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
               }`}
               onClick={() => setMode('scan')}
             >
-              📷 Scan Barcode
+              <CameraIcon className="h-4 w-4" />
+              Scan Barcode
             </button>
             <button
-              className={`px-6 py-2 rounded text-sm font-medium ${
+              className={`px-6 py-2 rounded text-sm font-medium flex items-center gap-2 ${
                 mode === 'manual'
                   ? 'bg-primary text-white'
                   : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
               }`}
               onClick={() => setMode('manual')}
             >
-              🔍 Manual Check-in
+              <SearchIcon className="h-4 w-4" />
+              Manual Check-in
             </button>
           </div>
         </div>
@@ -344,9 +349,10 @@ export default function CheckInPage() {
               <div className="text-center mt-6">
                 <button
                   onClick={() => setMode('manual')}
-                  className="bg-secondary text-white px-6 py-3 rounded font-medium hover:bg-secondary-dark"
+                  className="bg-secondary text-white px-6 py-3 rounded font-medium hover:bg-secondary-dark flex items-center gap-2 mx-auto"
                 >
-                  🔍 Switch to Manual Mode
+                  <SearchIcon className="h-4 w-4" />
+                  Switch to Manual Mode
                 </button>
               </div>
 
@@ -361,15 +367,21 @@ export default function CheckInPage() {
                     <p className="flex justify-between">
                       <span className="text-gray-600 dark:text-gray-300">Status:</span>
                       {lastScannedStudent.checked_in ? (
-                        <span className="text-green-600 font-medium">✅ Checked In</span>
+                        <span className="text-green-600 font-medium flex items-center gap-1">
+                          <CheckIcon className="h-4 w-4" />
+                          Checked In
+                        </span>
                       ) : (
-                        <span className="text-red-600 font-medium">❌ Not Checked In</span>
+                        <span className="text-red-600 font-medium flex items-center gap-1">
+                          <XIcon className="h-4 w-4" />
+                          Not Checked In
+                        </span>
                       )}
                     </p>
                     {lastScannedStudent.checked_in_at && (
                       <p className="flex justify-between">
                         <span className="text-gray-600 dark:text-gray-300">Time:</span>
-                        <span className="font-medium text-gray-900 dark:text-white">{new Date(lastScannedStudent.checked_in_at).toLocaleTimeString()}</span>
+                        <span className="font-medium text-gray-900 dark:text-white">{formatTime12Hour(lastScannedStudent.checked_in_at)}</span>
                       </p>
                     )}
                   </div>
@@ -430,17 +442,19 @@ export default function CheckInPage() {
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm">
                               {student.checked_in ? (
-                                <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100">
-                                  ✅ Checked In
+                                <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100 flex items-center gap-1">
+                                  <CheckIcon className="h-3 w-3" />
+                                  Checked In
                                   {student.checked_in_at && (
                                     <span className="ml-1 opacity-70">
-                                      {new Date(student.checked_in_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                      {formatTime12Hour(student.checked_in_at)}
                                     </span>
                                   )}
                                 </span>
                               ) : (
-                                <span className="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100">
-                                  ❌ Not Checked In
+                                <span className="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100 flex items-center gap-1">
+                                  <XIcon className="h-3 w-3" />
+                                  Not Checked In
                                 </span>
                               )}
                             </td>
@@ -486,9 +500,10 @@ export default function CheckInPage() {
               <div className="text-center mt-6">
                 <button
                   onClick={() => setMode('scan')}
-                  className="bg-secondary text-white px-6 py-3 rounded font-medium hover:bg-secondary-dark"
+                  className="bg-secondary text-white px-6 py-3 rounded font-medium hover:bg-secondary-dark flex items-center gap-2 mx-auto"
                 >
-                  📷 Switch to Scanner Mode
+                  <CameraIcon className="h-4 w-4" />
+                  Switch to Scanner Mode
                 </button>
               </div>
             </div>

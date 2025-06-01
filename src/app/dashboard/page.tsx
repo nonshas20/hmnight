@@ -12,6 +12,7 @@ import EditStudentModal from '@/components/EditStudentModal';
 import DeleteConfirmationModal from '@/components/DeleteConfirmationModal';
 import { printStudentList, exportToExcel } from '@/utils/export';
 import { useAuth } from '@/contexts/AuthContext';
+import { UsersIcon, CheckIcon, ChartIcon, PrinterIcon, DocumentIcon, RegisterIcon, CheckInIcon, XIcon, EditIcon, TrashIcon, QrCodeIcon, MailIcon, ClockIcon } from '@/components/Icons';
 
 export default function DashboardPage() {
   const { students, setStudents, updateStudent, removeStudent } = useAppStore();
@@ -500,7 +501,11 @@ export default function DashboardPage() {
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
   };
 
   return (
@@ -526,7 +531,7 @@ export default function DashboardPage() {
               <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
                 <div className="flex items-center">
                   <div className="bg-primary text-white p-3 rounded-full mr-4">
-                    👥
+                    <UsersIcon className="h-6 w-6" />
                   </div>
                   <div>
                     <h2 className="text-lg font-medium mb-1 text-gray-900 dark:text-white">Total Registrations</h2>
@@ -538,7 +543,7 @@ export default function DashboardPage() {
               <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
                 <div className="flex items-center">
                   <div className="bg-green-500 text-white p-3 rounded-full mr-4">
-                    ✅
+                    <CheckIcon className="h-6 w-6" />
                   </div>
                   <div>
                     <h2 className="text-lg font-medium mb-1 text-gray-900 dark:text-white">Checked In</h2>
@@ -550,7 +555,7 @@ export default function DashboardPage() {
               <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
                 <div className="flex items-center">
                   <div className="bg-red-500 text-white p-3 rounded-full mr-4">
-                    ❌
+                    <XIcon className="h-6 w-6" />
                   </div>
                   <div>
                     <h2 className="text-lg font-medium mb-1 text-gray-900 dark:text-white">Not Checked In</h2>
@@ -562,7 +567,7 @@ export default function DashboardPage() {
               <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
                 <div className="flex items-center">
                   <div className="bg-secondary text-white p-3 rounded-full mr-4">
-                    📊
+                    <ChartIcon className="h-6 w-6" />
                   </div>
                   <div>
                     <h2 className="text-lg font-medium mb-1 text-gray-900 dark:text-white">Check-in Rate</h2>
@@ -590,16 +595,18 @@ export default function DashboardPage() {
                     <div className="flex space-x-2">
                       <button
                         onClick={handlePrintStudentList}
-                        className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-lg flex items-center"
+                        className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-lg flex items-center gap-1"
                       >
-                        🖨️ Print List
+                        <PrinterIcon className="h-3 w-3" />
+                        Print List
                       </button>
 
                       <button
                         onClick={handleExportToExcel}
-                        className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs rounded-lg flex items-center"
+                        className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs rounded-lg flex items-center gap-1"
                       >
-                        📊 Export to Excel
+                        <DocumentIcon className="h-3 w-3" />
+                        Export to Excel
                       </button>
                     </div>
                   </div>
@@ -627,17 +634,19 @@ export default function DashboardPage() {
                       <div className="flex space-x-2">
                         <button
                           onClick={handleSendTickets}
-                          className="px-3 py-1.5 bg-secondary hover:bg-secondary-dark text-white text-xs rounded-lg flex items-center"
+                          className="px-3 py-1.5 bg-secondary hover:bg-secondary-dark text-white text-xs rounded-lg flex items-center gap-1"
                           disabled={isSendingTickets}
                         >
-                          {isSendingTickets ? '⏳' : '📧'} Send Tickets ({selectedStudents.length})
+                          {isSendingTickets ? <ClockIcon className="h-3 w-3" /> : <MailIcon className="h-3 w-3" />}
+                          Send Tickets ({selectedStudents.length})
                         </button>
 
                         <button
                           onClick={handleMultiDelete}
-                          className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs rounded-lg flex items-center"
+                          className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs rounded-lg flex items-center gap-1"
                         >
-                          🗑️ Delete Selected ({selectedStudents.length})
+                          <TrashIcon className="h-3 w-3" />
+                          Delete Selected ({selectedStudents.length})
                         </button>
                       </div>
                     )}
@@ -700,12 +709,14 @@ export default function DashboardPage() {
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm">
                               {student.checked_in ? (
-                                <span className="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100">
-                                  ✅ Checked In
+                                <span className="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100 items-center gap-1">
+                                  <CheckIcon className="h-3 w-3" />
+                                  Checked In
                                 </span>
                               ) : (
-                                <span className="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100">
-                                  ❌ Not Checked In
+                                <span className="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100 items-center gap-1">
+                                  <XIcon className="h-3 w-3" />
+                                  Not Checked In
                                 </span>
                               )}
                             </td>
@@ -716,23 +727,26 @@ export default function DashboardPage() {
                               <div className="flex space-x-2">
                                 <button
                                   onClick={() => handleViewBarcode(student)}
-                                  className="px-3 py-1.5 bg-primary hover:bg-primary-dark text-white text-xs rounded-lg flex items-center"
+                                  className="px-3 py-1.5 bg-primary hover:bg-primary-dark text-white text-xs rounded-lg flex items-center gap-1"
                                 >
-                                  📱 Barcode
+                                  <QrCodeIcon className="h-3 w-3" />
+                                  Barcode
                                 </button>
 
                                 <button
                                   onClick={() => handleEditStudent(student)}
-                                  className="px-3 py-1.5 bg-secondary hover:bg-secondary-dark text-white text-xs rounded-lg flex items-center"
+                                  className="px-3 py-1.5 bg-secondary hover:bg-secondary-dark text-white text-xs rounded-lg flex items-center gap-1"
                                 >
-                                  ✏️ Edit
+                                  <EditIcon className="h-3 w-3" />
+                                  Edit
                                 </button>
 
                                 <button
                                   onClick={() => handleDeleteStudent(student)}
-                                  className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs rounded-lg flex items-center"
+                                  className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs rounded-lg flex items-center gap-1"
                                 >
-                                  🗑️ Delete
+                                  <TrashIcon className="h-3 w-3" />
+                                  Delete
                                 </button>
                               </div>
                             </td>
@@ -750,12 +764,14 @@ export default function DashboardPage() {
                 </div>
 
                 <div className="mt-8 flex justify-center space-x-6">
-                  <Link href="/register" className="btn-primary flex items-center px-6 py-3 rounded shadow-lg hover:shadow-xl">
-                    📝 Register New Student
+                  <Link href="/register" className="btn-primary flex items-center gap-2 px-6 py-3 rounded shadow-lg hover:shadow-xl">
+                    <RegisterIcon className="h-5 w-5" />
+                    Register New Student
                   </Link>
 
-                  <Link href="/check-in" className="btn-secondary flex items-center px-6 py-3 rounded shadow-lg hover:shadow-xl">
-                    ✅ Check-in Students
+                  <Link href="/check-in" className="btn-secondary flex items-center gap-2 px-6 py-3 rounded shadow-lg hover:shadow-xl">
+                    <CheckInIcon className="h-5 w-5" />
+                    Check-in Students
                   </Link>
                 </div>
               </div>

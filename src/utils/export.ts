@@ -23,7 +23,11 @@ export const printStudentList = (students: Student[]) => {
   const formatDate = (dateString: string | undefined) => {
     if (!dateString) return '-';
     const date = new Date(dateString);
-    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
   };
   
   // Create HTML content for the print window
