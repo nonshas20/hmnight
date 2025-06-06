@@ -388,6 +388,7 @@ export default function CheckInPage() {
               </div>
 
               <AdvancedBarcodeScanner
+                key={mode} // Force remount when mode changes
                 onScan={handleScanSuccess}
                 onError={handleScanError}
                 isActive={mode === 'time-in' || mode === 'time-out'}
