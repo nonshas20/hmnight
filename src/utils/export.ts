@@ -176,8 +176,8 @@ export const printStudentList = (students: Student[]) => {
               <td class="${student.current_status === 'IN' ? 'timed-in' : student.current_status === 'OUT' ? 'timed-out' : 'never-entered'}">
                 ${student.current_status === 'IN' ? 'In' : student.current_status === 'OUT' ? 'Out' : 'Never'}
               </td>
-              <td>${student.time_in ? formatDate(student.time_in).split(' ')[1] : '-'}</td>
-              <td>${student.time_out ? formatDate(student.time_out).split(' ')[1] : '-'}</td>
+              <td>${student.time_in ? new Date(student.time_in).toLocaleTimeString([], {hour: 'numeric', minute: '2-digit', hour12: true}) : '-'}</td>
+              <td>${student.time_out ? new Date(student.time_out).toLocaleTimeString([], {hour: 'numeric', minute: '2-digit', hour12: true}) : '-'}</td>
             </tr>
           `).join('')}
         </tbody>
