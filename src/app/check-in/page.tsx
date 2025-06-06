@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
-import { getStudents, getStudentByBarcode, checkInStudent, toggleStudentTimeStatus } from '@/lib/supabase';
+import { getStudents, getStudentByBarcode, checkInStudent, toggleStudentTimeStatus, timeInStudent, timeOutStudent } from '@/lib/supabase';
 import { useAppStore } from '@/lib/store';
 import { Student } from '@/lib/supabase';
 import AdvancedBarcodeScanner from '@/components/AdvancedBarcodeScanner';
@@ -170,9 +170,9 @@ export default function CheckInPage() {
         toast.success('Created demo student for testing');
       }
 
-      // Determine action based on current status
+      // Determine action based on active tab
       const statusDisplay = getStatusDisplay(student.current_status);
-      const actionText = student.current_status === 'IN' ? 'Time Out' : 'Time In';
+      const actionText = activeTab === 'time-out' ? 'Time Out' : 'Time In';
 
       // Check if student has already completed their cycle
       if (student.current_status === 'OUT') {
@@ -181,9 +181,27 @@ export default function CheckInPage() {
         return;
       }
 
+      // Validate the scan against the active tab
+      if (activeTab === 'time-in' && student.current_status === 'IN') {
+        toast.error(`${student.name} is already inside! Switch to Time Out tab to check them out.`);
+        setLastScannedStudent(student);
+        return;
+      }
+
+      if (activeTab === 'time-out' && student.current_status !== 'IN') {
+        toast.error(`${student.name} is not inside! Switch to Time In tab to check them in first.`);
+        setLastScannedStudent(student);
+        return;
+      }
+
       try {
-        // Use the new toggle function for time tracking
-        const updatedStudent = await toggleStudentTimeStatus(student.id);
+        // Use specific functions based on active tab instead of toggle
+        let updatedStudent;
+        if (activeTab === 'time-in') {
+          updatedStudent = await timeInStudent(student.id);
+        } else {
+          updatedStudent = await timeOutStudent(student.id);
+        }
 
         if (updatedStudent && !(updatedStudent as any).error) {
           console.log('Student time status updated successfully in database');
@@ -364,6 +382,43 @@ export default function CheckInPage() {
                 <h2 className="text-2xl font-bold mb-2 text-gray-900 dark:text-white">Barcode Scanner</h2>
                 <p className="text-gray-600 dark:text-gray-300">
                   Position the barcode in front of the camera to scan
+                </p>
+              </div>
+
+              {/* Time In/Time Out Tabs for Scanner */}
+              <div className="flex justify-center mb-6">
+                <div className="bg-gray-100 dark:bg-gray-700 rounded-lg p-1 border border-gray-200 dark:border-gray-600">
+                  <button
+                    className={`px-6 py-2 rounded text-sm font-medium flex items-center gap-2 ${
+                      activeTab === 'time-in'
+                        ? 'bg-green-500 text-white shadow-sm'
+                        : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                    }`}
+                    onClick={() => setActiveTab('time-in')}
+                  >
+                    <CheckIcon className="h-4 w-4" />
+                    Time In Mode
+                  </button>
+                  <button
+                    className={`px-6 py-2 rounded text-sm font-medium flex items-center gap-2 ${
+                      activeTab === 'time-out'
+                        ? 'bg-red-500 text-white shadow-sm'
+                        : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                    }`}
+                    onClick={() => setActiveTab('time-out')}
+                  >
+                    <XIcon className="h-4 w-4" />
+                    Time Out Mode
+                  </button>
+                </div>
+              </div>
+
+              <div className="text-center mb-4">
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  {activeTab === 'time-in'
+                    ? '🟢 Scanner will only TIME IN students (Never Entered → Inside)'
+                    : '🔴 Scanner will only TIME OUT students (Inside → Completed)'
+                  }
                 </p>
               </div>
 

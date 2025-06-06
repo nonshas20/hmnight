@@ -114,19 +114,18 @@ export async function timeOutStudent(id: string) {
   }
 
   // Calculate total time spent if time_in exists
-  let totalTimeSpent = currentStudent.total_time_spent || '0 seconds';
   if (currentStudent.time_in) {
     const timeIn = new Date(currentStudent.time_in);
     const timeOut = new Date(now);
     const sessionDuration = Math.floor((timeOut.getTime() - timeIn.getTime()) / 1000); // in seconds
 
-    // Add session duration to existing total (PostgreSQL will handle interval arithmetic)
+    // Simple approach: just store the session duration in seconds format
     const { data: updatedData, error: updateError } = await supabase
       .from('students')
       .update({
         time_out: now,
         current_status: 'OUT',
-        total_time_spent: `${totalTimeSpent} + ${sessionDuration} seconds`
+        total_time_spent: `${sessionDuration} seconds`
       })
       .eq('id', id)
       .select()
