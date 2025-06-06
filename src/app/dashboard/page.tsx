@@ -13,6 +13,7 @@ import DeleteConfirmationModal from '@/components/DeleteConfirmationModal';
 import { printStudentList, exportToExcel } from '@/utils/export';
 import { useAuth } from '@/contexts/AuthContext';
 import { UsersIcon, CheckIcon, ChartIcon, PrinterIcon, DocumentIcon, RegisterIcon, CheckInIcon, XIcon, EditIcon, TrashIcon, QrCodeIcon, MailIcon, ClockIcon } from '@/components/Icons';
+import { formatTime12Hour, getStatusDisplay, formatDuration, calculateTimeSpent } from '@/utils/time';
 
 export default function DashboardPage() {
   const { students, setStudents, updateStudent, removeStudent } = useAppStore();
@@ -33,6 +34,8 @@ export default function DashboardPage() {
     checkedIn: 0,
     notCheckedIn: 0,
     checkInRate: 0,
+    currentlyInside: 0,
+    totalTimeSpent: '0m',
   });
   const { isLoggedIn, loading } = useAuth();
   const router = useRouter();
@@ -58,13 +61,47 @@ export default function DashboardPage() {
   useEffect(() => {
     if (students.length > 0) {
       const checkedIn = students.filter(student => student.checked_in).length;
+      const currentlyInside = students.filter(student => student.current_status === 'IN').length;
       const total = students.length;
+
+      // Calculate total time spent across all students
+      let totalSeconds = 0;
+      students.forEach(student => {
+        if (student.total_time_spent) {
+          // Parse PostgreSQL interval format
+          const timeMatch = student.total_time_spent.match(/(\d+):(\d+):(\d+)/);
+          const dayMatch = student.total_time_spent.match(/(\d+)\s+day/);
+          const secondsMatch = student.total_time_spent.match(/(\d+)\s*seconds?/);
+
+          if (timeMatch) {
+            const hours = parseInt(timeMatch[1], 10);
+            const minutes = parseInt(timeMatch[2], 10);
+            const seconds = parseInt(timeMatch[3], 10);
+            const days = dayMatch ? parseInt(dayMatch[1], 10) : 0;
+            totalSeconds += (days * 24 * 3600) + (hours * 3600) + (minutes * 60) + seconds;
+          } else if (secondsMatch) {
+            totalSeconds += parseInt(secondsMatch[1], 10);
+          }
+        }
+
+        // Add current session time for students currently inside
+        if (student.current_status === 'IN' && student.time_in) {
+          const sessionStart = new Date(student.time_in);
+          const now = new Date();
+          const sessionSeconds = Math.floor((now.getTime() - sessionStart.getTime()) / 1000);
+          totalSeconds += sessionSeconds;
+        }
+      });
+
+      const totalTimeSpent = formatDuration(`${totalSeconds} seconds`);
 
       setStats({
         total,
         checkedIn,
         notCheckedIn: total - checkedIn,
         checkInRate: total > 0 ? Math.round((checkedIn / total) * 100) : 0,
+        currentlyInside,
+        totalTimeSpent,
       });
 
       // Update filtered students when students change
@@ -527,7 +564,7 @@ export default function DashboardPage() {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6 mb-8">
               <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
                 <div className="flex items-center">
                   <div className="bg-primary text-white p-3 rounded-full mr-4">
@@ -546,8 +583,32 @@ export default function DashboardPage() {
                     <CheckIcon className="h-6 w-6" />
                   </div>
                   <div>
-                    <h2 className="text-lg font-medium mb-1 text-gray-900 dark:text-white">Checked In</h2>
-                    <p className="text-3xl font-bold text-gray-900 dark:text-white">{stats.checkedIn}</p>
+                    <h2 className="text-lg font-medium mb-1 text-gray-900 dark:text-white">Currently Inside</h2>
+                    <p className="text-3xl font-bold text-gray-900 dark:text-white">{stats.currentlyInside}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+                <div className="flex items-center">
+                  <div className="bg-blue-500 text-white p-3 rounded-full mr-4">
+                    <ClockIcon className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-medium mb-1 text-gray-900 dark:text-white">Total Time Spent</h2>
+                    <p className="text-3xl font-bold text-gray-900 dark:text-white">{stats.totalTimeSpent}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+                <div className="flex items-center">
+                  <div className="bg-blue-500 text-white p-3 rounded-full mr-4">
+                    <CheckIcon className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-medium mb-1 text-gray-900 dark:text-white">Completed Cycles</h2>
+                    <p className="text-3xl font-bold text-gray-900 dark:text-white">{students.filter(s => s.current_status === 'OUT').length}</p>
                   </div>
                 </div>
               </div>
@@ -558,7 +619,7 @@ export default function DashboardPage() {
                     <XIcon className="h-6 w-6" />
                   </div>
                   <div>
-                    <h2 className="text-lg font-medium mb-1 text-gray-900 dark:text-white">Not Checked In</h2>
+                    <h2 className="text-lg font-medium mb-1 text-gray-900 dark:text-white">Never Entered</h2>
                     <p className="text-3xl font-bold text-gray-900 dark:text-white">{stats.notCheckedIn}</p>
                   </div>
                 </div>
@@ -570,7 +631,7 @@ export default function DashboardPage() {
                     <ChartIcon className="h-6 w-6" />
                   </div>
                   <div>
-                    <h2 className="text-lg font-medium mb-1 text-gray-900 dark:text-white">Check-in Rate</h2>
+                    <h2 className="text-lg font-medium mb-1 text-gray-900 dark:text-white">Participation Rate</h2>
                     <p className="text-3xl font-bold text-gray-900 dark:text-white">{stats.checkInRate}%</p>
                   </div>
                 </div>
@@ -585,10 +646,13 @@ export default function DashboardPage() {
                   <div className="flex flex-wrap gap-2">
                     <div className="flex space-x-2">
                       <span className="px-3 py-1 bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100 text-xs rounded-full">
-                        {stats.checkedIn} Checked In
+                        {stats.currentlyInside} Inside
+                      </span>
+                      <span className="px-3 py-1 bg-blue-100 text-blue-800 dark:bg-blue-800 dark:text-blue-100 text-xs rounded-full">
+                        {students.filter(s => s.current_status === 'OUT').length} Completed
                       </span>
                       <span className="px-3 py-1 bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100 text-xs rounded-full">
-                        {stats.notCheckedIn} Pending
+                        {stats.notCheckedIn} Never Entered
                       </span>
                     </div>
 
@@ -673,10 +737,13 @@ export default function DashboardPage() {
                           Registration Date
                         </th>
                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                          Status
+                          Current Status
                         </th>
                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                          Check-in Time
+                          Time In/Out
+                        </th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                          Session Time
                         </th>
                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                           Actions
@@ -708,20 +775,42 @@ export default function DashboardPage() {
                               {formatDate(student.created_at)}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm">
-                              {student.checked_in ? (
-                                <span className="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100 items-center gap-1">
-                                  <CheckIcon className="h-3 w-3" />
-                                  Checked In
-                                </span>
-                              ) : (
-                                <span className="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100 items-center gap-1">
-                                  <XIcon className="h-3 w-3" />
-                                  Not Checked In
-                                </span>
-                              )}
+                              {(() => {
+                                const statusDisplay = getStatusDisplay(student.current_status || 'NEVER_ENTERED');
+                                return (
+                                  <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${statusDisplay.color} items-center gap-1`}>
+                                    {student.current_status === 'IN' ? (
+                                      <CheckIcon className="h-3 w-3" />
+                                    ) : (
+                                      <XIcon className="h-3 w-3" />
+                                    )}
+                                    {statusDisplay.text}
+                                  </span>
+                                );
+                              })()}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-xs text-gray-500 dark:text-gray-300">
+                              <div className="space-y-1">
+                                {student.time_in && (
+                                  <div>In: {formatTime12Hour(student.time_in)}</div>
+                                )}
+                                {student.time_out && (
+                                  <div>Out: {formatTime12Hour(student.time_out)}</div>
+                                )}
+                              </div>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
-                              {student.checked_in_at ? formatDate(student.checked_in_at) : '-'}
+                              {student.current_status === 'IN' && student.time_in ? (
+                                <span className="text-blue-600 font-medium">
+                                  {calculateTimeSpent(student.time_in)}
+                                </span>
+                              ) : student.total_time_spent ? (
+                                <span className="text-gray-600">
+                                  {formatDuration(student.total_time_spent)}
+                                </span>
+                              ) : (
+                                '-'
+                              )}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm">
                               <div className="flex space-x-2">
@@ -754,7 +843,7 @@ export default function DashboardPage() {
                         ))
                       ) : (
                         <tr>
-                          <td colSpan={7} className="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                          <td colSpan={8} className="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
                             {searchQuery ? 'No students found matching your search' : 'No students registered yet'}
                           </td>
                         </tr>

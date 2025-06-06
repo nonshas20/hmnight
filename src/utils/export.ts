@@ -1,4 +1,5 @@
 import { Student } from '@/lib/supabase';
+import { formatDuration, getStatusDisplay } from '@/utils/time';
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 
@@ -19,7 +20,10 @@ export const printStudentList = (students: Student[]) => {
   const currentDate = new Date().toLocaleDateString();
   
   // Format check-in status and date for display
-  const formatStatus = (checked_in: boolean) => checked_in ? 'Checked In' : 'Not Checked In';
+  const formatStatus = (status: string) => {
+    const statusDisplay = getStatusDisplay(status as any);
+    return statusDisplay.text;
+  };
   const formatDate = (dateString: string | undefined) => {
     if (!dateString) return '-';
     const date = new Date(dateString);
@@ -119,8 +123,10 @@ export const printStudentList = (students: Student[]) => {
             <th>Email</th>
             <th>Barcode</th>
             <th>Registration Date</th>
-            <th>Status</th>
-            <th>Check-in Time</th>
+            <th>Current Status</th>
+            <th>Time In</th>
+            <th>Time Out</th>
+            <th>Total Time Spent</th>
           </tr>
         </thead>
         <tbody>
@@ -130,10 +136,12 @@ export const printStudentList = (students: Student[]) => {
               <td>${student.email}</td>
               <td>${student.barcode}</td>
               <td>${formatDate(student.created_at)}</td>
-              <td class="${student.checked_in ? 'checked-in' : 'not-checked-in'}">
-                ${formatStatus(student.checked_in)}
+              <td class="${student.current_status === 'IN' ? 'checked-in' : 'not-checked-in'}">
+                ${formatStatus(student.current_status || 'NEVER_ENTERED')}
               </td>
-              <td>${formatDate(student.checked_in_at)}</td>
+              <td>${formatDate(student.time_in)}</td>
+              <td>${formatDate(student.time_out)}</td>
+              <td>${student.total_time_spent ? formatDuration(student.total_time_spent) : '-'}</td>
             </tr>
           `).join('')}
         </tbody>
@@ -180,8 +188,10 @@ export const exportToExcel = async (students: Student[]) => {
     { header: 'Email', key: 'email', width: 30 },
     { header: 'Barcode', key: 'barcode', width: 20 },
     { header: 'Registration Date', key: 'created_at', width: 25 },
-    { header: 'Status', key: 'status', width: 15 },
-    { header: 'Check-in Time', key: 'checked_in_at', width: 25 }
+    { header: 'Current Status', key: 'status', width: 15 },
+    { header: 'Time In', key: 'time_in', width: 25 },
+    { header: 'Time Out', key: 'time_out', width: 25 },
+    { header: 'Total Time Spent', key: 'total_time_spent', width: 20 }
   ];
   
   // Style the header row
@@ -199,8 +209,10 @@ export const exportToExcel = async (students: Student[]) => {
       email: student.email,
       barcode: student.barcode,
       created_at: new Date(student.created_at).toLocaleString(),
-      status: student.checked_in ? 'Checked In' : 'Not Checked In',
-      checked_in_at: student.checked_in_at ? new Date(student.checked_in_at).toLocaleString() : '-'
+      status: formatStatus(student.current_status || 'NEVER_ENTERED'),
+      time_in: student.time_in ? new Date(student.time_in).toLocaleString() : '-',
+      time_out: student.time_out ? new Date(student.time_out).toLocaleString() : '-',
+      total_time_spent: student.total_time_spent ? formatDuration(student.total_time_spent) : '-'
     });
   });
   
@@ -208,8 +220,10 @@ export const exportToExcel = async (students: Student[]) => {
   worksheet.eachRow((row, rowNumber) => {
     if (rowNumber > 1) { // Skip header row
       const statusCell = row.getCell(5); // Status column
-      if (statusCell.value === 'Checked In') {
+      if (statusCell.value === 'Inside') {
         statusCell.font = { color: { argb: 'FF4CAF50' } };
+      } else if (statusCell.value === 'Outside') {
+        statusCell.font = { color: { argb: 'FFFF9800' } };
       } else {
         statusCell.font = { color: { argb: 'FFF44336' } };
       }
