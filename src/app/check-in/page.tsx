@@ -183,13 +183,25 @@ export default function CheckInPage() {
 
       // Validate the scan against the active tab
       if (activeTab === 'time-in' && student.current_status === 'IN') {
-        toast.error(`${student.name} is already inside! Switch to Time Out tab to check them out.`);
+        toast.error(`${student.name} is already inside! Switch to Time Out mode to check them out.`);
         setLastScannedStudent(student);
         return;
       }
 
-      if (activeTab === 'time-out' && student.current_status !== 'IN') {
-        toast.error(`${student.name} is not inside! Switch to Time In tab to check them in first.`);
+      if (activeTab === 'time-in' && (student.current_status as any) === 'OUT') {
+        toast.error(`${student.name} has already completed their cycle! They cannot be checked in again.`);
+        setLastScannedStudent(student);
+        return;
+      }
+
+      if (activeTab === 'time-out' && student.current_status === 'NEVER_ENTERED') {
+        toast.error(`${student.name} has never entered! Switch to Time In mode to check them in first.`);
+        setLastScannedStudent(student);
+        return;
+      }
+
+      if (activeTab === 'time-out' && (student.current_status as any) === 'OUT') {
+        toast.error(`${student.name} has already been checked out! They have completed their cycle.`);
         setLastScannedStudent(student);
         return;
       }

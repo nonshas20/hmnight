@@ -62,6 +62,14 @@ export default function AdvancedBarcodeScanner({ onScan, onError, isActive }: Ad
         console.log('Creating BrowserMultiFormatReader...');
         readerRef.current = new BrowserMultiFormatReader();
 
+        // Configure the reader for better barcode detection
+        const hints = new Map();
+        // Enable multiple barcode formats for better compatibility
+        hints.set(2, true); // ASSUME_GS1
+        hints.set(3, true); // TRY_HARDER - more thorough scanning
+        hints.set(4, true); // PURE_BARCODE
+        readerRef.current.hints = hints;
+
         console.log('Getting video input devices...');
         // Get available video devices with timeout
         const videoDevices = await Promise.race([
@@ -133,7 +141,24 @@ export default function AdvancedBarcodeScanner({ onScan, onError, isActive }: Ad
       setIsScanning(true);
       console.log('Starting ZXing scanner...');
 
-      // Start decoding from video device
+      // Configure video constraints for better barcode scanning
+      const constraints = {
+        video: {
+          deviceId: selectedDeviceId ? { exact: selectedDeviceId } : undefined,
+          facingMode: selectedDeviceId ? undefined : 'environment',
+          width: { ideal: 1280, min: 640 },
+          height: { ideal: 720, min: 480 },
+          focusMode: 'continuous',
+          // Enable autofocus for better barcode detection
+          advanced: [
+            { focusMode: 'continuous' },
+            { exposureMode: 'continuous' },
+            { whiteBalanceMode: 'continuous' }
+          ]
+        }
+      };
+
+      // Start decoding from video device with enhanced settings
       await readerRef.current.decodeFromVideoDevice(
         selectedDeviceId || null,
         videoRef.current,
