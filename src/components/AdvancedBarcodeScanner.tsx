@@ -71,13 +71,13 @@ export default function AdvancedBarcodeScanner({ onScan, onError, isActive }: Ad
       console.log('Starting ZXing scanner optimized for small barcodes...');
 
       // Enhanced constraints for small barcode scanning
-      const constraints = {
+      const constraints: MediaStreamConstraints = {
         video: {
           deviceId: selectedDeviceId ? { exact: selectedDeviceId } : undefined,
           width: { ideal: 1920, min: 1280 },
           height: { ideal: 1080, min: 720 },
           focusMode: 'continuous',
-          zoom: zoomLevel > 1 ? zoomLevel : undefined
+          ...(zoomLevel > 1 && { zoom: zoomLevel } as any)
         }
       };
 
@@ -145,7 +145,7 @@ export default function AdvancedBarcodeScanner({ onScan, onError, isActive }: Ad
         const track = streamRef.getVideoTracks()[0];
         if (track && 'applyConstraints' in track) {
           await track.applyConstraints({
-            advanced: [{ zoom: newZoom }]
+            advanced: [{ zoom: newZoom } as any]
           });
         }
       } catch (error) {
@@ -162,7 +162,7 @@ export default function AdvancedBarcodeScanner({ onScan, onError, isActive }: Ad
         const track = streamRef.getVideoTracks()[0];
         if (track && 'applyConstraints' in track) {
           await track.applyConstraints({
-            advanced: [{ zoom: newZoom }]
+            advanced: [{ zoom: newZoom } as any]
           });
         }
       } catch (error) {
@@ -185,7 +185,7 @@ export default function AdvancedBarcodeScanner({ onScan, onError, isActive }: Ad
           advanced: [{
             focusMode: 'single-shot',
             pointsOfInterest: [{ x, y }]
-          }]
+          } as any]
         });
       }
     } catch (error) {
