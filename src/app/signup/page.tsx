@@ -44,12 +44,13 @@ export default function SignupPage() {
       const success = await signup(formData.name, formData.email, formData.password);
 
       if (success) {
-        toast.success('Account created successfully! Please sign in to continue.');
+        toast.success('Account created successfully! You can now sign in.');
         router.push('/login?from=signup');
       } else {
-        toast.error('User with this email already exists');
+        toast.error('Failed to create account. Email may already be registered.');
       }
     } catch (error) {
+      console.error('Signup error:', error);
       toast.error('Failed to create account');
     } finally {
       setIsLoading(false);

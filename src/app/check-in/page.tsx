@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
-import { getStudents, getStudentByBarcode, checkInStudent } from '@/lib/supabase';
+import { getStudents, getStudentByBarcode, checkInStudent, timeInStudent, timeOutStudent } from '@/lib/supabase';
 import { useAppStore } from '@/lib/store';
 import { Student } from '@/lib/supabase';
 import AdvancedBarcodeScanner from '@/components/AdvancedBarcodeScanner';
@@ -14,7 +14,7 @@ import { formatTime12Hour } from '@/utils/time';
 
 export default function CheckInPage() {
   const { students, filteredStudents, addStudent, updateStudent, setSearchQuery: setStoreSearchQuery } = useAppStore();
-  const [mode, setMode] = useState<'scan' | 'manual'>('scan');
+  const [mode, setMode] = useState<'manual' | 'time-in' | 'time-out'>('time-in');
   const [searchQuery, setLocalSearchQuery] = useState('');
   const [lastScannedStudent, setLastScannedStudent] = useState<Student | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -153,6 +153,7 @@ export default function CheckInPage() {
           email: 'demo@example.com',
           barcode: barcode,
           checked_in: false,
+          current_status: 'NEVER_ENTERED',
           created_at: new Date().toISOString()
         };
 
@@ -161,58 +162,91 @@ export default function CheckInPage() {
         toast.success('Created demo student for testing');
       }
 
-      if (student.checked_in) {
-        // Use toast.id to prevent duplicate toasts
-        toast.error(`${student.name} is already checked in!`, { id: `already-checked-in-${student.id}` });
-        setLastScannedStudent(student);
-      } else {
-        try {
-          // Try to check in the student in the database
-          const updatedStudent = await checkInStudent(student.id);
-
-          if (updatedStudent) {
-            console.log('Student checked in successfully in database');
-            updateStudent(updatedStudent);
-            setLastScannedStudent(updatedStudent);
-            toast.success(`${updatedStudent.name} checked in successfully!`);
-          } else {
-            // If database update fails, still update the UI for demo
-            console.log('Database update failed, updating UI only');
-            const localUpdatedStudent = {
-              ...student,
-              checked_in: true,
-              checked_in_at: new Date().toISOString()
-            };
-            updateStudent(localUpdatedStudent);
-            setLastScannedStudent(localUpdatedStudent);
-            toast.success(`${student.name} checked in successfully (UI only)!`);
-          }
-        } catch (checkInError) {
-          console.error('Error checking in student:', checkInError);
-
-          // Still update the UI for demo purposes
-          const localUpdatedStudent = {
-            ...student,
-            checked_in: true,
-            checked_in_at: new Date().toISOString()
-          };
-          updateStudent(localUpdatedStudent);
-          setLastScannedStudent(localUpdatedStudent);
-
-          // Force re-render of the filtered students list
-          if (searchQuery) {
-            // Re-apply the search to refresh the filtered list
-            setStoreSearchQuery(searchQuery);
-          }
-
-          toast.success(`${student.name} marked as checked in (UI only)`);
-        }
+      // Handle different modes
+      if (mode === 'time-in') {
+        await handleTimeIn(student);
+      } else if (mode === 'time-out') {
+        await handleTimeOut(student);
       }
     } catch (error) {
       console.error('Scan error:', error);
       toast.error('Error processing scan: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
   };
+
+  const handleTimeIn = async (student: Student) => {
+    if (student.current_status === 'IN') {
+      toast.error(`${student.name} is already timed in!`);
+      setLastScannedStudent(student);
+      return;
+    }
+
+    const successToast = toast.loading(`Timing in ${student.name}...`);
+
+    try {
+      const updatedStudent = await timeInStudent(student.id);
+      toast.dismiss(successToast);
+
+      if (updatedStudent) {
+        updateStudent(updatedStudent);
+        setLastScannedStudent(updatedStudent);
+        toast.success(`${updatedStudent.name} timed in successfully!`);
+      } else {
+        // Fallback UI update
+        const localUpdatedStudent = {
+          ...student,
+          current_status: 'IN' as const,
+          time_in: new Date().toISOString(),
+          checked_in: true,
+          checked_in_at: new Date().toISOString()
+        };
+        updateStudent(localUpdatedStudent);
+        setLastScannedStudent(localUpdatedStudent);
+        toast.success(`${student.name} timed in (UI only)!`);
+      }
+    } catch (error) {
+      toast.dismiss(successToast);
+      console.error('Error timing in student:', error);
+      toast.error('Failed to time in student');
+    }
+  };
+
+  const handleTimeOut = async (student: Student) => {
+    if (student.current_status !== 'IN') {
+      toast.error(`${student.name} is not currently timed in!`);
+      setLastScannedStudent(student);
+      return;
+    }
+
+    const successToast = toast.loading(`Timing out ${student.name}...`);
+
+    try {
+      const updatedStudent = await timeOutStudent(student.id);
+      toast.dismiss(successToast);
+
+      if (updatedStudent) {
+        updateStudent(updatedStudent);
+        setLastScannedStudent(updatedStudent);
+        toast.success(`${updatedStudent.name} timed out successfully!`);
+      } else {
+        // Fallback UI update
+        const localUpdatedStudent = {
+          ...student,
+          current_status: 'OUT' as const,
+          time_out: new Date().toISOString()
+        };
+        updateStudent(localUpdatedStudent);
+        setLastScannedStudent(localUpdatedStudent);
+        toast.success(`${student.name} timed out (UI only)!`);
+      }
+    } catch (error) {
+      toast.dismiss(successToast);
+      console.error('Error timing out student:', error);
+      toast.error('Failed to time out student');
+    }
+  };
+
+
 
   const handleManualCheckIn = async (student: Student) => {
     if (student.checked_in) {
@@ -296,25 +330,36 @@ export default function CheckInPage() {
 
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold mb-4 text-gray-900 dark:text-white">
-            Student Check-in
+            Student Time Tracking
           </h1>
           <p className="text-gray-600 dark:text-gray-300">
-            Scan barcodes or search for students to check them in
+            Scan barcodes to track student time in and time out
           </p>
         </div>
 
         <div className="flex justify-center mb-8">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-1 border border-gray-200 dark:border-gray-700">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-1 border border-gray-200 dark:border-gray-700 flex flex-wrap gap-1">
             <button
               className={`px-6 py-2 rounded text-sm font-medium flex items-center gap-2 ${
-                mode === 'scan'
-                  ? 'bg-primary text-white'
+                mode === 'time-in'
+                  ? 'bg-green-600 text-white'
                   : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
               }`}
-              onClick={() => setMode('scan')}
+              onClick={() => setMode('time-in')}
             >
               <CameraIcon className="h-4 w-4" />
-              Scan Barcode
+              Time In
+            </button>
+            <button
+              className={`px-6 py-2 rounded text-sm font-medium flex items-center gap-2 ${
+                mode === 'time-out'
+                  ? 'bg-red-600 text-white'
+                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+              }`}
+              onClick={() => setMode('time-out')}
+            >
+              <CameraIcon className="h-4 w-4" />
+              Time Out
             </button>
             <button
               className={`px-6 py-2 rounded text-sm font-medium flex items-center gap-2 ${
@@ -325,25 +370,27 @@ export default function CheckInPage() {
               onClick={() => setMode('manual')}
             >
               <SearchIcon className="h-4 w-4" />
-              Manual Check-in
+              Manual
             </button>
           </div>
         </div>
 
         <div className="max-w-4xl mx-auto">
-          {mode === 'scan' ? (
+          {(mode === 'time-in' || mode === 'time-out') ? (
             <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
               <div className="text-center mb-6">
-                <h2 className="text-2xl font-bold mb-2 text-gray-900 dark:text-white">Barcode Scanner</h2>
+                <h2 className="text-2xl font-bold mb-2 text-gray-900 dark:text-white">
+                  {mode === 'time-in' ? 'Time In Scanner' : 'Time Out Scanner'}
+                </h2>
                 <p className="text-gray-600 dark:text-gray-300">
-                  Position the barcode in front of the camera to scan
+                  {mode === 'time-in' ? 'Scan to record student time in' : 'Scan to record student time out'}
                 </p>
               </div>
 
               <AdvancedBarcodeScanner
                 onScan={handleScanSuccess}
                 onError={handleScanError}
-                isActive={mode === 'scan'}
+                isActive={mode === 'time-in' || mode === 'time-out'}
               />
 
               <div className="text-center mt-6">
@@ -365,25 +412,37 @@ export default function CheckInPage() {
                       <span className="font-medium text-gray-900 dark:text-white">{lastScannedStudent.name}</span>
                     </p>
                     <p className="flex justify-between">
-                      <span className="text-gray-600 dark:text-gray-300">Status:</span>
-                      {lastScannedStudent.checked_in ? (
+                      <span className="text-gray-600 dark:text-gray-300">Current Status:</span>
+                      {lastScannedStudent.current_status === 'IN' ? (
                         <span className="text-green-600 font-medium flex items-center gap-1">
                           <CheckIcon className="h-4 w-4" />
-                          Checked In
+                          Timed In
+                        </span>
+                      ) : lastScannedStudent.current_status === 'OUT' ? (
+                        <span className="text-orange-600 font-medium flex items-center gap-1">
+                          <XIcon className="h-4 w-4" />
+                          Timed Out
                         </span>
                       ) : (
-                        <span className="text-red-600 font-medium flex items-center gap-1">
+                        <span className="text-gray-600 font-medium flex items-center gap-1">
                           <XIcon className="h-4 w-4" />
-                          Not Checked In
+                          Never Entered
                         </span>
                       )}
                     </p>
-                    {lastScannedStudent.checked_in_at && (
+                    {lastScannedStudent.time_in && (
                       <p className="flex justify-between">
-                        <span className="text-gray-600 dark:text-gray-300">Time:</span>
-                        <span className="font-medium text-gray-900 dark:text-white">{formatTime12Hour(lastScannedStudent.checked_in_at)}</span>
+                        <span className="text-gray-600 dark:text-gray-300">Time In:</span>
+                        <span className="font-medium text-gray-900 dark:text-white">{formatTime12Hour(lastScannedStudent.time_in)}</span>
                       </p>
                     )}
+                    {lastScannedStudent.time_out && (
+                      <p className="flex justify-between">
+                        <span className="text-gray-600 dark:text-gray-300">Time Out:</span>
+                        <span className="font-medium text-gray-900 dark:text-white">{formatTime12Hour(lastScannedStudent.time_out)}</span>
+                      </p>
+                    )}
+
                   </div>
                 </div>
               )}
@@ -391,9 +450,9 @@ export default function CheckInPage() {
           ) : (
             <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
               <div className="text-center mb-6">
-                <h2 className="text-2xl font-bold mb-2 text-gray-900 dark:text-white">Manual Check-in</h2>
+                <h2 className="text-2xl font-bold mb-2 text-gray-900 dark:text-white">Manual Time Tracking</h2>
                 <p className="text-gray-600 dark:text-gray-300">
-                  Search for students by name or email
+                  Search for students and manage their time in/out manually
                 </p>
               </div>
 
@@ -441,35 +500,58 @@ export default function CheckInPage() {
                               {student.email}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm">
-                              {student.checked_in ? (
+                              {student.current_status === 'IN' ? (
                                 <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100 flex items-center gap-1">
                                   <CheckIcon className="h-3 w-3" />
-                                  Checked In
-                                  {student.checked_in_at && (
+                                  Timed In
+                                  {student.time_in && (
                                     <span className="ml-1 opacity-70">
-                                      {formatTime12Hour(student.checked_in_at)}
+                                      {formatTime12Hour(student.time_in)}
+                                    </span>
+                                  )}
+                                </span>
+                              ) : student.current_status === 'OUT' ? (
+                                <span className="px-2 py-1 text-xs font-semibold rounded-full bg-orange-100 text-orange-800 dark:bg-orange-800 dark:text-orange-100 flex items-center gap-1">
+                                  <XIcon className="h-3 w-3" />
+                                  Timed Out
+                                  {student.time_out && (
+                                    <span className="ml-1 opacity-70">
+                                      {formatTime12Hour(student.time_out)}
                                     </span>
                                   )}
                                 </span>
                               ) : (
-                                <span className="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100 flex items-center gap-1">
+                                <span className="px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100 flex items-center gap-1">
                                   <XIcon className="h-3 w-3" />
-                                  Not Checked In
+                                  Never Entered
                                 </span>
                               )}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm">
-                              <button
-                                onClick={() => handleManualCheckIn(student)}
-                                disabled={student.checked_in}
-                                className={`px-4 py-2 rounded text-white text-sm ${
-                                  student.checked_in
-                                    ? 'bg-gray-400 cursor-not-allowed'
-                                    : 'bg-primary hover:bg-primary-dark'
-                                }`}
-                              >
-                                {student.checked_in ? 'Already Checked In' : 'Check In'}
-                              </button>
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => handleTimeIn(student)}
+                                  disabled={student.current_status === 'IN'}
+                                  className={`px-3 py-1 rounded text-white text-xs ${
+                                    student.current_status === 'IN'
+                                      ? 'bg-gray-400 cursor-not-allowed'
+                                      : 'bg-green-600 hover:bg-green-700'
+                                  }`}
+                                >
+                                  Time In
+                                </button>
+                                <button
+                                  onClick={() => handleTimeOut(student)}
+                                  disabled={student.current_status !== 'IN'}
+                                  className={`px-3 py-1 rounded text-white text-xs ${
+                                    student.current_status !== 'IN'
+                                      ? 'bg-gray-400 cursor-not-allowed'
+                                      : 'bg-red-600 hover:bg-red-700'
+                                  }`}
+                                >
+                                  Time Out
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         ))
@@ -499,11 +581,11 @@ export default function CheckInPage() {
 
               <div className="text-center mt-6">
                 <button
-                  onClick={() => setMode('scan')}
+                  onClick={() => setMode('time-in')}
                   className="bg-secondary text-white px-6 py-3 rounded font-medium hover:bg-secondary-dark flex items-center gap-2 mx-auto"
                 >
                   <CameraIcon className="h-4 w-4" />
-                  Switch to Scanner Mode
+                  Switch to Time In Scanner
                 </button>
               </div>
             </div>

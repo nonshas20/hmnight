@@ -18,6 +18,10 @@ export type Student = {
   seat_number?: string;
   checked_in: boolean;
   checked_in_at?: string;
+  time_in?: string;
+  time_out?: string;
+  current_status: 'NEVER_ENTERED' | 'IN' | 'OUT';
+  total_time_spent?: string;
   created_at: string;
 };
 
@@ -67,6 +71,96 @@ export async function checkInStudent(id: string) {
   }
 
   return data as Student;
+}
+
+export async function timeInStudent(id: string) {
+  const now = new Date().toISOString();
+  const { data, error } = await supabase
+    .from('students')
+    .update({
+      time_in: now,
+      time_out: null, // Clear any previous time out
+      current_status: 'IN',
+      checked_in: true,
+      checked_in_at: now
+    })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error timing in student:', error);
+    return null;
+  }
+
+  return data as Student;
+}
+
+export async function timeOutStudent(id: string) {
+  const now = new Date().toISOString();
+
+  // First get the current student data to calculate time spent
+  const { data: currentStudent, error: fetchError } = await supabase
+    .from('students')
+    .select('time_in, total_time_spent')
+    .eq('id', id)
+    .single();
+
+  if (fetchError) {
+    console.error('Error fetching student for time out:', fetchError);
+    return null;
+  }
+
+  let newTotalTimeSpent = currentStudent.total_time_spent || '0 seconds';
+
+  // Calculate additional time if there's a time_in
+  if (currentStudent.time_in) {
+    const timeIn = new Date(currentStudent.time_in);
+    const timeOut = new Date(now);
+    const sessionDuration = timeOut.getTime() - timeIn.getTime();
+
+    // Convert to PostgreSQL interval format (in seconds)
+    const sessionSeconds = Math.floor(sessionDuration / 1000);
+
+    // Parse existing total time (assuming it's in PostgreSQL interval format)
+    const existingSeconds = parsePostgreSQLInterval(currentStudent.total_time_spent);
+    const totalSeconds = existingSeconds + sessionSeconds;
+
+    newTotalTimeSpent = `${totalSeconds} seconds`;
+  }
+
+  const { data, error } = await supabase
+    .from('students')
+    .update({
+      time_out: now,
+      current_status: 'OUT',
+      total_time_spent: newTotalTimeSpent
+    })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error timing out student:', error);
+    return null;
+  }
+
+  return data as Student;
+}
+
+// Helper function to parse PostgreSQL interval format
+function parsePostgreSQLInterval(interval: string | null): number {
+  if (!interval) return 0;
+
+  // Handle simple "X seconds" format
+  const secondsMatch = interval.match(/(\d+)\s*seconds?/);
+  if (secondsMatch) {
+    return parseInt(secondsMatch[1], 10);
+  }
+
+  // Handle more complex interval formats if needed
+  // For now, default to 0
+  return 0;
 }
 
 export async function createStudent(name: string, email: string, barcode: string, tableNumber?: string, seatNumber?: string) {

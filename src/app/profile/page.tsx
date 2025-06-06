@@ -106,8 +106,8 @@ export default function ProfilePage() {
                 Go to Dashboard
               </Link>
               <button
-                onClick={() => {
-                  logout();
+                onClick={async () => {
+                  await logout();
                   router.push('/');
                 }}
                 className="btn-secondary flex-1 py-3 hover:bg-red-500 hover:border-red-500 transition-colors duration-200"

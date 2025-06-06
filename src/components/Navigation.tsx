@@ -53,8 +53,8 @@ export default function Navigation() {
                   Profile
                 </NavLink>
                 <button
-                  onClick={() => {
-                    logout();
+                  onClick={async () => {
+                    await logout();
                     closeMenu();
                   }}
                   className="px-4 py-2 rounded text-sm font-medium mx-1 text-gray-600 dark:text-gray-300 hover:text-red-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors duration-200"
@@ -113,8 +113,8 @@ export default function Navigation() {
                   Profile
                 </MobileNavLink>
                 <button
-                  onClick={() => {
-                    logout();
+                  onClick={async () => {
+                    await logout();
                     closeMenu();
                   }}
                   className="block w-full text-left px-4 py-3 text-base font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-red-500 transition-colors duration-200 border-t border-gray-200 dark:border-gray-700"

@@ -15,6 +15,8 @@ export default function AdvancedBarcodeScanner({ onScan, onError, isActive }: Ad
   const [isScanning, setIsScanning] = useState(false);
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>('');
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [streamRef, setStreamRef] = useState<MediaStream | null>(null);
 
   useEffect(() => {
     // Initialize the scanner when component mounts
@@ -66,9 +68,25 @@ export default function AdvancedBarcodeScanner({ onScan, onError, isActive }: Ad
 
     try {
       setIsScanning(true);
-      console.log('Starting ZXing scanner...');
+      console.log('Starting ZXing scanner optimized for small barcodes...');
 
-      // Start decoding from video device
+      // Enhanced constraints for small barcode scanning
+      const constraints = {
+        video: {
+          deviceId: selectedDeviceId ? { exact: selectedDeviceId } : undefined,
+          width: { ideal: 1920, min: 1280 },
+          height: { ideal: 1080, min: 720 },
+          focusMode: 'continuous',
+          zoom: zoomLevel > 1 ? zoomLevel : undefined
+        }
+      };
+
+      // Get media stream with enhanced settings
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      videoRef.current.srcObject = stream;
+      setStreamRef(stream);
+
+      // Start decoding with optimized settings for small barcodes
       await readerRef.current.decodeFromVideoDevice(
         selectedDeviceId || null,
         videoRef.current,
@@ -77,14 +95,14 @@ export default function AdvancedBarcodeScanner({ onScan, onError, isActive }: Ad
             console.log('Barcode detected:', result.getText());
             onScan(result.getText());
           }
-          
+
           if (error && !(error instanceof NotFoundException)) {
             console.error('Scan error:', error);
           }
         }
       );
 
-      console.log('ZXing scanner started successfully');
+      console.log('ZXing scanner started successfully with enhanced settings');
     } catch (error) {
       console.error('Failed to start scanning:', error);
       setIsScanning(false);
@@ -99,6 +117,12 @@ export default function AdvancedBarcodeScanner({ onScan, onError, isActive }: Ad
       setIsScanning(false);
       console.log('ZXing scanner stopped');
     }
+
+    // Clean up stream
+    if (streamRef) {
+      streamRef.getTracks().forEach(track => track.stop());
+      setStreamRef(null);
+    }
   };
 
   const switchCamera = async (deviceId: string) => {
@@ -109,6 +133,63 @@ export default function AdvancedBarcodeScanner({ onScan, onError, isActive }: Ad
       setTimeout(() => {
         startScanning();
       }, 100);
+    }
+  };
+
+  // Zoom control functions for small barcode scanning
+  const handleZoomIn = async () => {
+    if (streamRef && zoomLevel < 3) {
+      const newZoom = Math.min(zoomLevel + 0.5, 3);
+      setZoomLevel(newZoom);
+      try {
+        const track = streamRef.getVideoTracks()[0];
+        if (track && 'applyConstraints' in track) {
+          await track.applyConstraints({
+            advanced: [{ zoom: newZoom }]
+          });
+        }
+      } catch (error) {
+        console.log('Zoom not supported on this device, will apply on next scan start');
+      }
+    }
+  };
+
+  const handleZoomOut = async () => {
+    if (streamRef && zoomLevel > 1) {
+      const newZoom = Math.max(zoomLevel - 0.5, 1);
+      setZoomLevel(newZoom);
+      try {
+        const track = streamRef.getVideoTracks()[0];
+        if (track && 'applyConstraints' in track) {
+          await track.applyConstraints({
+            advanced: [{ zoom: newZoom }]
+          });
+        }
+      } catch (error) {
+        console.log('Zoom not supported on this device, will apply on next scan start');
+      }
+    }
+  };
+
+  const handleFocusClick = async (event: React.MouseEvent<HTMLDivElement>) => {
+    if (!streamRef) return;
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = (event.clientX - rect.left) / rect.width;
+    const y = (event.clientY - rect.top) / rect.height;
+
+    try {
+      const track = streamRef.getVideoTracks()[0];
+      if (track && 'applyConstraints' in track) {
+        await track.applyConstraints({
+          advanced: [{
+            focusMode: 'single-shot',
+            pointsOfInterest: [{ x, y }]
+          }]
+        });
+      }
+    } catch (error) {
+      console.log('Manual focus not supported on this device');
     }
   };
 
@@ -132,7 +213,11 @@ export default function AdvancedBarcodeScanner({ onScan, onError, isActive }: Ad
       )}
 
       {/* Video Element */}
-      <div className="relative mb-8 rounded-lg overflow-hidden bg-black aspect-video max-w-lg mx-auto shadow-lg border border-white/10">
+      <div
+        className="relative mb-8 rounded-lg overflow-hidden bg-black aspect-video max-w-lg mx-auto shadow-lg border border-white/10 cursor-crosshair"
+        onClick={handleFocusClick}
+        title="Tap to focus"
+      >
         <video
           ref={videoRef}
           className="w-full h-full object-cover"
@@ -140,20 +225,55 @@ export default function AdvancedBarcodeScanner({ onScan, onError, isActive }: Ad
           muted
         />
 
-        {/* Scanning Overlay */}
+        {/* Enhanced Scanning Overlay for Small Barcodes */}
         <div className="absolute inset-0 pointer-events-none">
-          {/* Corner markers */}
-          <div className="absolute top-4 left-4 w-8 h-8 border-l-4 border-t-4 border-primary"></div>
-          <div className="absolute top-4 right-4 w-8 h-8 border-r-4 border-t-4 border-primary"></div>
-          <div className="absolute bottom-4 left-4 w-8 h-8 border-l-4 border-b-4 border-primary"></div>
-          <div className="absolute bottom-4 right-4 w-8 h-8 border-r-4 border-b-4 border-primary"></div>
-          
+          {/* Larger scanning area for small barcodes */}
+          <div className="absolute inset-4 border-2 border-primary/50 rounded-lg">
+            {/* Corner markers */}
+            <div className="absolute -top-1 -left-1 w-6 h-6 border-l-4 border-t-4 border-primary"></div>
+            <div className="absolute -top-1 -right-1 w-6 h-6 border-r-4 border-t-4 border-primary"></div>
+            <div className="absolute -bottom-1 -left-1 w-6 h-6 border-l-4 border-b-4 border-primary"></div>
+            <div className="absolute -bottom-1 -right-1 w-6 h-6 border-r-4 border-b-4 border-primary"></div>
+          </div>
+
           {/* Scanning line animation */}
           {isScanning && (
             <div className="absolute inset-0 flex items-center justify-center">
-              <div className="w-full h-0.5 bg-primary animate-pulse"></div>
+              <div className="w-3/4 h-0.5 bg-primary animate-pulse shadow-lg"></div>
             </div>
           )}
+
+          {/* Small barcode guidance */}
+          <div className="absolute top-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
+            📱 For small barcodes: Use zoom controls
+          </div>
+        </div>
+
+        {/* Zoom Controls */}
+        <div className="absolute bottom-4 right-4 flex flex-col gap-2 pointer-events-auto">
+          <button
+            onClick={handleZoomIn}
+            disabled={zoomLevel >= 3}
+            className="bg-black/70 text-white p-2 rounded-full disabled:opacity-50 hover:bg-black/90 transition-colors shadow-lg"
+            title="Zoom In (Better for small barcodes)"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+          </button>
+          <button
+            onClick={handleZoomOut}
+            disabled={zoomLevel <= 1}
+            className="bg-black/70 text-white p-2 rounded-full disabled:opacity-50 hover:bg-black/90 transition-colors shadow-lg"
+            title="Zoom Out"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 12H6" />
+            </svg>
+          </button>
+          <div className="bg-black/70 text-white text-xs px-2 py-1 rounded text-center shadow-lg">
+            {zoomLevel.toFixed(1)}x
+          </div>
         </div>
 
         {/* Status Overlay */}
@@ -170,17 +290,26 @@ export default function AdvancedBarcodeScanner({ onScan, onError, isActive }: Ad
         )}
       </div>
 
-      {/* Scanner Status */}
-      <div className="text-center">
+      {/* Enhanced Scanner Status */}
+      <div className="text-center space-y-2">
         <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm ${
-          isScanning 
-            ? 'bg-green-900/20 text-green-300 border border-green-500/30' 
+          isScanning
+            ? 'bg-green-900/20 text-green-300 border border-green-500/30'
             : 'bg-gray-900/20 text-gray-300 border border-gray-500/30'
         }`}>
           <div className={`w-2 h-2 rounded-full mr-2 ${
             isScanning ? 'bg-green-400 animate-pulse' : 'bg-gray-400'
           }`}></div>
-          {isScanning ? 'Scanning...' : 'Ready'}
+          {isScanning ? 'ZXing Scanner Active' : 'Ready to Scan'}
+        </div>
+
+        {/* Performance Tips */}
+        <div className="text-xs text-gray-500 dark:text-gray-400 max-w-md mx-auto">
+          <p>📱 <strong>Small Barcode Tips:</strong></p>
+          <p>• Use zoom controls for tiny phone barcodes</p>
+          <p>• Tap screen to focus on barcode area</p>
+          <p>• Ensure good lighting and steady hands</p>
+          <p>• ZXing library optimized for small codes</p>
         </div>
       </div>
     </div>

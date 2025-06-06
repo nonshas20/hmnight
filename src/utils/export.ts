@@ -56,26 +56,51 @@ export const printStudentList = (students: Student[]) => {
         table {
           width: 100%;
           border-collapse: collapse;
-          margin-bottom: 30px;
+          margin-bottom: 20px;
+          font-size: 11px;
         }
         th, td {
           border: 1px solid #ddd;
-          padding: 12px 8px;
+          padding: 4px 6px;
           text-align: left;
         }
         th {
           background-color: #f2f2f2;
           font-weight: bold;
+          font-size: 10px;
+          text-transform: uppercase;
         }
         tr:nth-child(even) {
           background-color: #f9f9f9;
         }
-        .checked-in {
-          color: #4CAF50;
+        td:first-child {
+          font-weight: 500;
+          width: 25%;
+        }
+        td:nth-child(2) {
+          width: 30%;
+          font-size: 10px;
+        }
+        td:nth-child(3) {
+          width: 15%;
+          text-align: center;
+        }
+        td:nth-child(4), td:nth-child(5) {
+          width: 15%;
+          text-align: center;
+          font-size: 10px;
+        }
+        .timed-in {
+          color: #16a34a;
           font-weight: bold;
         }
-        .not-checked-in {
-          color: #F44336;
+        .timed-out {
+          color: #ea580c;
+          font-weight: bold;
+        }
+        .never-entered {
+          color: #6b7280;
+          font-weight: bold;
         }
         .summary {
           margin-top: 30px;
@@ -96,10 +121,31 @@ export const printStudentList = (students: Student[]) => {
           }
           body {
             margin: 0;
-            padding: 15px;
+            padding: 10px;
+            font-size: 10px;
           }
           button {
             display: none;
+          }
+          h1 {
+            font-size: 16px;
+            margin-bottom: 10px;
+          }
+          .report-date {
+            font-size: 10px;
+            margin-bottom: 15px;
+          }
+          table {
+            font-size: 9px;
+            margin-bottom: 15px;
+          }
+          th, td {
+            padding: 2px 4px;
+          }
+          .summary {
+            font-size: 10px;
+            margin-top: 15px;
+            padding: 10px;
           }
         }
       </style>
@@ -117,10 +163,9 @@ export const printStudentList = (students: Student[]) => {
           <tr>
             <th>Name</th>
             <th>Email</th>
-            <th>Barcode</th>
-            <th>Registration Date</th>
             <th>Status</th>
-            <th>Check-in Time</th>
+            <th>Time In</th>
+            <th>Time Out</th>
           </tr>
         </thead>
         <tbody>
@@ -128,12 +173,11 @@ export const printStudentList = (students: Student[]) => {
             <tr>
               <td>${student.name}</td>
               <td>${student.email}</td>
-              <td>${student.barcode}</td>
-              <td>${formatDate(student.created_at)}</td>
-              <td class="${student.checked_in ? 'checked-in' : 'not-checked-in'}">
-                ${formatStatus(student.checked_in)}
+              <td class="${student.current_status === 'IN' ? 'timed-in' : student.current_status === 'OUT' ? 'timed-out' : 'never-entered'}">
+                ${student.current_status === 'IN' ? 'In' : student.current_status === 'OUT' ? 'Out' : 'Never'}
               </td>
-              <td>${formatDate(student.checked_in_at)}</td>
+              <td>${student.time_in ? formatDate(student.time_in).split(' ')[1] : '-'}</td>
+              <td>${student.time_out ? formatDate(student.time_out).split(' ')[1] : '-'}</td>
             </tr>
           `).join('')}
         </tbody>
@@ -142,9 +186,9 @@ export const printStudentList = (students: Student[]) => {
       <div class="summary">
         <h2>Summary</h2>
         <div class="summary-item">Total Students: <strong>${students.length}</strong></div>
-        <div class="summary-item">Checked In: <strong>${students.filter(s => s.checked_in).length}</strong></div>
-        <div class="summary-item">Not Checked In: <strong>${students.filter(s => !s.checked_in).length}</strong></div>
-        <div class="summary-item">Check-in Rate: <strong>${Math.round((students.filter(s => s.checked_in).length / students.length) * 100) || 0}%</strong></div>
+        <div class="summary-item">Currently Timed In: <strong>${students.filter(s => s.current_status === 'IN').length}</strong></div>
+        <div class="summary-item">Timed Out: <strong>${students.filter(s => s.current_status === 'OUT').length}</strong></div>
+        <div class="summary-item">Never Entered: <strong>${students.filter(s => s.current_status === 'NEVER_ENTERED').length}</strong></div>
       </div>
     </body>
     </html>
@@ -181,7 +225,9 @@ export const exportToExcel = async (students: Student[]) => {
     { header: 'Barcode', key: 'barcode', width: 20 },
     { header: 'Registration Date', key: 'created_at', width: 25 },
     { header: 'Status', key: 'status', width: 15 },
-    { header: 'Check-in Time', key: 'checked_in_at', width: 25 }
+    { header: 'Time In', key: 'time_in', width: 25 },
+    { header: 'Time Out', key: 'time_out', width: 25 },
+    { header: 'Total Time', key: 'total_time_spent', width: 20 }
   ];
   
   // Style the header row
@@ -199,8 +245,10 @@ export const exportToExcel = async (students: Student[]) => {
       email: student.email,
       barcode: student.barcode,
       created_at: new Date(student.created_at).toLocaleString(),
-      status: student.checked_in ? 'Checked In' : 'Not Checked In',
-      checked_in_at: student.checked_in_at ? new Date(student.checked_in_at).toLocaleString() : '-'
+      status: student.current_status === 'IN' ? 'Timed In' : student.current_status === 'OUT' ? 'Timed Out' : 'Never Entered',
+      time_in: student.time_in ? new Date(student.time_in).toLocaleString() : '-',
+      time_out: student.time_out ? new Date(student.time_out).toLocaleString() : '-',
+      total_time_spent: student.total_time_spent || '-'
     });
   });
   
@@ -208,10 +256,12 @@ export const exportToExcel = async (students: Student[]) => {
   worksheet.eachRow((row, rowNumber) => {
     if (rowNumber > 1) { // Skip header row
       const statusCell = row.getCell(5); // Status column
-      if (statusCell.value === 'Checked In') {
-        statusCell.font = { color: { argb: 'FF4CAF50' } };
+      if (statusCell.value === 'Timed In') {
+        statusCell.font = { color: { argb: 'FF16a34a' } };
+      } else if (statusCell.value === 'Timed Out') {
+        statusCell.font = { color: { argb: 'FFea580c' } };
       } else {
-        statusCell.font = { color: { argb: 'FFF44336' } };
+        statusCell.font = { color: { argb: 'FF6b7280' } };
       }
     }
   });
@@ -223,9 +273,9 @@ export const exportToExcel = async (students: Student[]) => {
   worksheet.getCell(`A${summaryRowIndex + 1}`).font = { bold: true, size: 14 };
   
   worksheet.addRow(['Total Students', students.length]);
-  worksheet.addRow(['Checked In', students.filter(s => s.checked_in).length]);
-  worksheet.addRow(['Not Checked In', students.filter(s => !s.checked_in).length]);
-  worksheet.addRow(['Check-in Rate', `${Math.round((students.filter(s => s.checked_in).length / students.length) * 100) || 0}%`]);
+  worksheet.addRow(['Currently Timed In', students.filter(s => s.current_status === 'IN').length]);
+  worksheet.addRow(['Timed Out', students.filter(s => s.current_status === 'OUT').length]);
+  worksheet.addRow(['Never Entered', students.filter(s => s.current_status === 'NEVER_ENTERED').length]);
   
   // Generate the Excel file
   const buffer = await workbook.xlsx.writeBuffer();

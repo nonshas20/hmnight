@@ -30,9 +30,9 @@ export default function DashboardPage() {
   const [filteredStudents, setFilteredStudents] = useState<Student[]>([]);
   const [stats, setStats] = useState({
     total: 0,
-    checkedIn: 0,
-    notCheckedIn: 0,
-    checkInRate: 0,
+    timedIn: 0,
+    timedOut: 0,
+    neverEntered: 0,
   });
   const { isLoggedIn, loading } = useAuth();
   const router = useRouter();
@@ -57,14 +57,16 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (students.length > 0) {
-      const checkedIn = students.filter(student => student.checked_in).length;
+      const timedIn = students.filter(student => student.current_status === 'IN').length;
+      const timedOut = students.filter(student => student.current_status === 'OUT').length;
+      const neverEntered = students.filter(student => student.current_status === 'NEVER_ENTERED').length;
       const total = students.length;
 
       setStats({
         total,
-        checkedIn,
-        notCheckedIn: total - checkedIn,
-        checkInRate: total > 0 ? Math.round((checkedIn / total) * 100) : 0,
+        timedIn,
+        timedOut,
+        neverEntered,
       });
 
       // Update filtered students when students change
@@ -216,14 +218,16 @@ export default function DashboardPage() {
 
       // Update stats immediately
       const updatedStudents = students.filter(student => student.id !== id);
-      const checkedIn = updatedStudents.filter(student => student.checked_in).length;
+      const timedIn = updatedStudents.filter(student => student.current_status === 'IN').length;
+      const timedOut = updatedStudents.filter(student => student.current_status === 'OUT').length;
+      const neverEntered = updatedStudents.filter(student => student.current_status === 'NEVER_ENTERED').length;
       const total = updatedStudents.length;
 
       setStats({
         total,
-        checkedIn,
-        notCheckedIn: total - checkedIn,
-        checkInRate: total > 0 ? Math.round((checkedIn / total) * 100) : 0,
+        timedIn,
+        timedOut,
+        neverEntered,
       });
 
       // Close modal immediately for better UX
@@ -284,14 +288,16 @@ export default function DashboardPage() {
 
       // Update stats immediately
       const updatedStudents = students.filter(student => !studentsToDelete.includes(student.id));
-      const checkedIn = updatedStudents.filter(student => student.checked_in).length;
+      const timedIn = updatedStudents.filter(student => student.current_status === 'IN').length;
+      const timedOut = updatedStudents.filter(student => student.current_status === 'OUT').length;
+      const neverEntered = updatedStudents.filter(student => student.current_status === 'NEVER_ENTERED').length;
       const total = updatedStudents.length;
 
       setStats({
         total,
-        checkedIn,
-        notCheckedIn: total - checkedIn,
-        checkInRate: total > 0 ? Math.round((checkedIn / total) * 100) : 0,
+        timedIn,
+        timedOut,
+        neverEntered,
       });
 
       // Clear selection after deletion
@@ -546,32 +552,32 @@ export default function DashboardPage() {
                     <CheckIcon className="h-6 w-6" />
                   </div>
                   <div>
-                    <h2 className="text-lg font-medium mb-1 text-gray-900 dark:text-white">Checked In</h2>
-                    <p className="text-3xl font-bold text-gray-900 dark:text-white">{stats.checkedIn}</p>
+                    <h2 className="text-lg font-medium mb-1 text-gray-900 dark:text-white">Currently Timed In</h2>
+                    <p className="text-3xl font-bold text-gray-900 dark:text-white">{stats.timedIn}</p>
                   </div>
                 </div>
               </div>
 
               <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
                 <div className="flex items-center">
-                  <div className="bg-red-500 text-white p-3 rounded-full mr-4">
+                  <div className="bg-orange-500 text-white p-3 rounded-full mr-4">
                     <XIcon className="h-6 w-6" />
                   </div>
                   <div>
-                    <h2 className="text-lg font-medium mb-1 text-gray-900 dark:text-white">Not Checked In</h2>
-                    <p className="text-3xl font-bold text-gray-900 dark:text-white">{stats.notCheckedIn}</p>
+                    <h2 className="text-lg font-medium mb-1 text-gray-900 dark:text-white">Timed Out</h2>
+                    <p className="text-3xl font-bold text-gray-900 dark:text-white">{stats.timedOut}</p>
                   </div>
                 </div>
               </div>
 
               <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
                 <div className="flex items-center">
-                  <div className="bg-secondary text-white p-3 rounded-full mr-4">
+                  <div className="bg-gray-500 text-white p-3 rounded-full mr-4">
                     <ChartIcon className="h-6 w-6" />
                   </div>
                   <div>
-                    <h2 className="text-lg font-medium mb-1 text-gray-900 dark:text-white">Check-in Rate</h2>
-                    <p className="text-3xl font-bold text-gray-900 dark:text-white">{stats.checkInRate}%</p>
+                    <h2 className="text-lg font-medium mb-1 text-gray-900 dark:text-white">Never Entered</h2>
+                    <p className="text-3xl font-bold text-gray-900 dark:text-white">{stats.neverEntered}</p>
                   </div>
                 </div>
               </div>
@@ -585,10 +591,13 @@ export default function DashboardPage() {
                   <div className="flex flex-wrap gap-2">
                     <div className="flex space-x-2">
                       <span className="px-3 py-1 bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100 text-xs rounded-full">
-                        {stats.checkedIn} Checked In
+                        {stats.timedIn} Timed In
                       </span>
-                      <span className="px-3 py-1 bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100 text-xs rounded-full">
-                        {stats.notCheckedIn} Pending
+                      <span className="px-3 py-1 bg-orange-100 text-orange-800 dark:bg-orange-800 dark:text-orange-100 text-xs rounded-full">
+                        {stats.timedOut} Timed Out
+                      </span>
+                      <span className="px-3 py-1 bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100 text-xs rounded-full">
+                        {stats.neverEntered} Never Entered
                       </span>
                     </div>
 
@@ -676,7 +685,10 @@ export default function DashboardPage() {
                           Status
                         </th>
                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                          Check-in Time
+                          Time In
+                        </th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                          Time Out
                         </th>
                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                           Actions
@@ -708,20 +720,28 @@ export default function DashboardPage() {
                               {formatDate(student.created_at)}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm">
-                              {student.checked_in ? (
+                              {student.current_status === 'IN' ? (
                                 <span className="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100 items-center gap-1">
                                   <CheckIcon className="h-3 w-3" />
-                                  Checked In
+                                  Timed In
+                                </span>
+                              ) : student.current_status === 'OUT' ? (
+                                <span className="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-orange-100 text-orange-800 dark:bg-orange-800 dark:text-orange-100 items-center gap-1">
+                                  <XIcon className="h-3 w-3" />
+                                  Timed Out
                                 </span>
                               ) : (
-                                <span className="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100 items-center gap-1">
+                                <span className="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100 items-center gap-1">
                                   <XIcon className="h-3 w-3" />
-                                  Not Checked In
+                                  Never Entered
                                 </span>
                               )}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
-                              {student.checked_in_at ? formatDate(student.checked_in_at) : '-'}
+                              {student.time_in ? formatDate(student.time_in) : '-'}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                              {student.time_out ? formatDate(student.time_out) : '-'}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm">
                               <div className="flex space-x-2">
@@ -754,7 +774,7 @@ export default function DashboardPage() {
                         ))
                       ) : (
                         <tr>
-                          <td colSpan={7} className="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                          <td colSpan={8} className="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
                             {searchQuery ? 'No students found matching your search' : 'No students registered yet'}
                           </td>
                         </tr>
