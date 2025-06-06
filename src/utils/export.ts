@@ -1,5 +1,11 @@
 import { Student } from '@/lib/supabase';
 import { formatDuration, getStatusDisplay } from '@/utils/time';
+
+// Helper function to format status for display
+const formatStatus = (status: string) => {
+  const statusDisplay = getStatusDisplay(status as any);
+  return statusDisplay.text;
+};
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 
@@ -19,11 +25,7 @@ export const printStudentList = (students: Student[]) => {
   // Get current date for the report header
   const currentDate = new Date().toLocaleDateString();
   
-  // Format check-in status and date for display
-  const formatStatus = (status: string) => {
-    const statusDisplay = getStatusDisplay(status as any);
-    return statusDisplay.text;
-  };
+  // Format date for display
   const formatDate = (dateString: string | undefined) => {
     if (!dateString) return '-';
     const date = new Date(dateString);

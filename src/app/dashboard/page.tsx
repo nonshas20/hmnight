@@ -261,6 +261,8 @@ export default function DashboardPage() {
         checkedIn,
         notCheckedIn: total - checkedIn,
         checkInRate: total > 0 ? Math.round((checkedIn / total) * 100) : 0,
+        currentlyInside: updatedStudents.filter(student => student.current_status === 'IN').length,
+        totalTimeSpent: '0m', // Will be recalculated in useEffect
       });
 
       // Close modal immediately for better UX
@@ -329,6 +331,8 @@ export default function DashboardPage() {
         checkedIn,
         notCheckedIn: total - checkedIn,
         checkInRate: total > 0 ? Math.round((checkedIn / total) * 100) : 0,
+        currentlyInside: updatedStudents.filter(student => student.current_status === 'IN').length,
+        totalTimeSpent: '0m', // Will be recalculated in useEffect
       });
 
       // Clear selection after deletion
