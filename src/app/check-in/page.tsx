@@ -16,6 +16,7 @@ import { formatTime12Hour, getStatusDisplay, calculateTimeSpent } from '@/utils/
 export default function CheckInPage() {
   const { students, filteredStudents, addStudent, updateStudent, setSearchQuery: setStoreSearchQuery } = useAppStore();
   const [mode, setMode] = useState<'scan' | 'manual'>('scan');
+  const [activeTab, setActiveTab] = useState<'time-in' | 'time-out'>('time-in');
   const [searchQuery, setLocalSearchQuery] = useState('');
   const [lastScannedStudent, setLastScannedStudent] = useState<Student | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -195,46 +196,15 @@ export default function CheckInPage() {
           toast.error(`${student.name} has already completed their entry/exit cycle!`);
           setLastScannedStudent(student);
         } else {
-          // If database update fails, still update the UI for demo
-          console.log('Database update failed, updating UI only');
-          const now = new Date().toISOString();
-          const localUpdatedStudent = {
-            ...student,
-            checked_in: true,
-            checked_in_at: now,
-            current_status: student.current_status === 'IN' ? 'OUT' : 'IN',
-            time_in: student.current_status !== 'IN' ? now : student.time_in,
-            time_out: student.current_status === 'IN' ? now : student.time_out
-          } as Student;
-
-          updateStudent(localUpdatedStudent);
-          setLastScannedStudent(localUpdatedStudent);
-          toast.success(`${student.name} - ${actionText} (UI only)!`);
+          // Database update failed - show error and don't update UI
+          console.error('Database update failed for student:', student.id);
+          toast.error(`Failed to update ${student.name} in database. Please try again.`);
+          setLastScannedStudent(student);
         }
       } catch (error) {
         console.error('Error updating student time status:', error);
-
-        // Still update the UI for demo purposes
-        const now = new Date().toISOString();
-        const localUpdatedStudent = {
-          ...student,
-          checked_in: true,
-          checked_in_at: now,
-          current_status: student.current_status === 'IN' ? 'OUT' : 'IN',
-          time_in: student.current_status !== 'IN' ? now : student.time_in,
-          time_out: student.current_status === 'IN' ? now : student.time_out
-        } as Student;
-
-        updateStudent(localUpdatedStudent);
-        setLastScannedStudent(localUpdatedStudent);
-
-        // Force re-render of the filtered students list
-        if (searchQuery) {
-          // Re-apply the search to refresh the filtered list
-          setStoreSearchQuery(searchQuery);
-        }
-
-        toast.success(`${student.name} - ${actionText} (UI only)`);
+        toast.error(`Failed to update ${student.name}. Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        setLastScannedStudent(student);
       }
     } catch (error) {
       console.error('Scan error:', error);
@@ -242,13 +212,24 @@ export default function CheckInPage() {
     }
   };
 
-  const handleManualCheckIn = async (student: Student) => {
-    const statusDisplay = getStatusDisplay(student.current_status);
-    const actionText = student.current_status === 'IN' ? 'Time Out' : 'Time In';
+  const handleManualCheckIn = async (student: Student, forceAction?: 'time-in' | 'time-out') => {
+    const requestedAction = forceAction || activeTab;
+    const actionText = requestedAction === 'time-out' ? 'Time Out' : 'Time In';
 
     // Check if student has already completed their cycle
     if (student.current_status === 'OUT') {
       toast.error(`${student.name} has already completed their entry/exit cycle!`);
+      return;
+    }
+
+    // Validate the requested action against current status
+    if (requestedAction === 'time-in' && student.current_status === 'IN') {
+      toast.error(`${student.name} is already inside! Use Time Out tab to check them out.`);
+      return;
+    }
+
+    if (requestedAction === 'time-out' && student.current_status !== 'IN') {
+      toast.error(`${student.name} is not inside! Use Time In tab to check them in first.`);
       return;
     }
 
@@ -314,18 +295,22 @@ export default function CheckInPage() {
         updateStudent(student);
         setLastScannedStudent(student);
       } else {
-        // If database update fails, we already updated the UI
-        console.log('Database update failed, UI already updated');
-        toast.success(`${student.name} - ${actionText} (UI only)!`);
+        // Database update failed - revert UI changes and show error
+        console.error('Database update failed for student:', student.id);
+        updateStudent(student);
+        setLastScannedStudent(student);
+        toast.error(`Failed to update ${student.name} in database. Please try again.`);
       }
     } catch (error) {
       console.error('Time tracking error:', error);
       // Dismiss loading toast
       toast.dismiss(loadingToast);
-      toast.error('Error updating time status: ' + (error instanceof Error ? error.message : 'Unknown error'));
 
-      // We already updated the UI, so just inform the user
-      toast.success(`${student.name} - ${actionText} (UI only)`);
+      // Revert UI changes
+      updateStudent(student);
+      setLastScannedStudent(student);
+
+      toast.error(`Failed to update ${student.name}. Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -470,6 +455,43 @@ export default function CheckInPage() {
                 </p>
               </div>
 
+              {/* Time In/Time Out Tabs */}
+              <div className="flex justify-center mb-6">
+                <div className="bg-gray-100 dark:bg-gray-700 rounded-lg p-1 border border-gray-200 dark:border-gray-600">
+                  <button
+                    className={`px-6 py-2 rounded text-sm font-medium flex items-center gap-2 ${
+                      activeTab === 'time-in'
+                        ? 'bg-green-500 text-white shadow-sm'
+                        : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                    }`}
+                    onClick={() => setActiveTab('time-in')}
+                  >
+                    <CheckIcon className="h-4 w-4" />
+                    Time In
+                  </button>
+                  <button
+                    className={`px-6 py-2 rounded text-sm font-medium flex items-center gap-2 ${
+                      activeTab === 'time-out'
+                        ? 'bg-red-500 text-white shadow-sm'
+                        : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                    }`}
+                    onClick={() => setActiveTab('time-out')}
+                  >
+                    <XIcon className="h-4 w-4" />
+                    Time Out
+                  </button>
+                </div>
+              </div>
+
+              <div className="text-center mb-4">
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  {activeTab === 'time-in'
+                    ? 'Showing students who can be checked in (Not Entered status)'
+                    : 'Showing students who can be checked out (Inside status)'
+                  }
+                </p>
+              </div>
+
               <div className="mb-6">
                 <input
                   type="text"
@@ -507,8 +529,18 @@ export default function CheckInPage() {
                       </tr>
                     </thead>
                     <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                      {filteredStudents.length > 0 ? (
-                        filteredStudents.map((student) => (
+                      {(() => {
+                        // Filter students based on active tab
+                        const tabFilteredStudents = filteredStudents.filter(student => {
+                          if (activeTab === 'time-in') {
+                            return student.current_status === 'NEVER_ENTERED';
+                          } else {
+                            return student.current_status === 'IN';
+                          }
+                        });
+
+                        return tabFilteredStudents.length > 0 ?
+                          tabFilteredStudents.map((student) => (
                           <tr key={student.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
                               {student.name}
@@ -553,34 +585,41 @@ export default function CheckInPage() {
                                 </span>
                               ) : (
                                 <button
-                                  onClick={() => handleManualCheckIn(student)}
-                                  className="px-4 py-2 rounded text-white text-sm bg-primary hover:bg-primary-dark"
+                                  onClick={() => handleManualCheckIn(student, activeTab)}
+                                  className={`px-4 py-2 rounded text-white text-sm ${
+                                    activeTab === 'time-in'
+                                      ? 'bg-green-500 hover:bg-green-600'
+                                      : 'bg-red-500 hover:bg-red-600'
+                                  }`}
                                 >
-                                  {student.current_status === 'IN' ? 'Time Out' : 'Time In'}
+                                  {activeTab === 'time-in' ? 'Time In' : 'Time Out'}
                                 </button>
                               )}
                             </td>
                           </tr>
-                        ))
-                      ) : isSearching ? (
-                        <tr>
-                          <td colSpan={5} className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
-                            Searching...
-                          </td>
-                        </tr>
-                      ) : searchQuery ? (
-                        <tr>
-                          <td colSpan={5} className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
-                            No students found matching "{searchQuery}"
-                          </td>
-                        </tr>
-                      ) : (
-                        <tr>
-                          <td colSpan={5} className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
-                            Enter a search term to find students
-                          </td>
-                        </tr>
-                      )}
+                        )) : isSearching ? (
+                          <tr>
+                            <td colSpan={5} className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                              Searching...
+                            </td>
+                          </tr>
+                        ) : searchQuery ? (
+                          <tr>
+                            <td colSpan={5} className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                              No students found matching "{searchQuery}" for {activeTab === 'time-in' ? 'Time In' : 'Time Out'}
+                            </td>
+                          </tr>
+                        ) : (
+                          <tr>
+                            <td colSpan={5} className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                              {activeTab === 'time-in'
+                                ? 'No students available for Time In. Search for students who haven\'t entered yet.'
+                                : 'No students currently inside. Switch to Time In tab to check students in first.'
+                              }
+                            </td>
+                          </tr>
+                        );
+                      })()}
                     </tbody>
                   </table>
                 </div>
