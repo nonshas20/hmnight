@@ -18,11 +18,6 @@ export type Student = {
   seat_number?: string;
   checked_in: boolean;
   checked_in_at?: string;
-  // New time tracking fields
-  time_in?: string;
-  time_out?: string;
-  current_status: 'NEVER_ENTERED' | 'IN' | 'OUT';
-  total_time_spent?: string; // PostgreSQL interval as string
   created_at: string;
 };
 
@@ -74,119 +69,6 @@ export async function checkInStudent(id: string) {
   return data as Student;
 }
 
-// New time tracking functions
-export async function timeInStudent(id: string) {
-  const now = new Date().toISOString();
-
-  const { data, error } = await supabase
-    .from('students')
-    .update({
-      time_in: now,
-      current_status: 'IN',
-      checked_in: true,
-      checked_in_at: now
-    })
-    .eq('id', id)
-    .select()
-    .single();
-
-  if (error) {
-    console.error('Error timing in student:', error);
-    return null;
-  }
-
-  return data as Student;
-}
-
-export async function timeOutStudent(id: string) {
-  const now = new Date().toISOString();
-
-  // First get the current student data to calculate time spent
-  const { data: currentStudent, error: fetchError } = await supabase
-    .from('students')
-    .select('*')
-    .eq('id', id)
-    .single();
-
-  if (fetchError || !currentStudent) {
-    console.error('Error fetching student for time out:', fetchError);
-    return null;
-  }
-
-  // Calculate total time spent if time_in exists
-  if (currentStudent.time_in) {
-    const timeIn = new Date(currentStudent.time_in);
-    const timeOut = new Date(now);
-    const sessionDuration = Math.floor((timeOut.getTime() - timeIn.getTime()) / 1000); // in seconds
-
-    // Simple approach: just store the session duration in seconds format
-    const { data: updatedData, error: updateError } = await supabase
-      .from('students')
-      .update({
-        time_out: now,
-        current_status: 'OUT',
-        total_time_spent: `${sessionDuration} seconds`
-      })
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (updateError) {
-      console.error('Error timing out student:', updateError);
-      return null;
-    }
-
-    return updatedData as Student;
-  } else {
-    // If no time_in, just set time_out and status
-    const { data, error } = await supabase
-      .from('students')
-      .update({
-        time_out: now,
-        current_status: 'OUT'
-      })
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Error timing out student:', error);
-      return null;
-    }
-
-    return data as Student;
-  }
-}
-
-export async function toggleStudentTimeStatus(id: string) {
-  // Get current student status
-  const { data: student, error: fetchError } = await supabase
-    .from('students')
-    .select('*')
-    .eq('id', id)
-    .single();
-
-  if (fetchError || !student) {
-    console.error('Error fetching student:', fetchError);
-    return null;
-  }
-
-  // Determine action based on current status
-  switch (student.current_status) {
-    case 'NEVER_ENTERED':
-      return await timeInStudent(id);
-    case 'IN':
-      return await timeOutStudent(id);
-    case 'OUT':
-      // Student has already completed their time in/out cycle
-      console.log('Student has already completed their entry/exit cycle');
-      return { ...student, error: 'ALREADY_COMPLETED' };
-    default:
-      console.error('Unknown student status:', student.current_status);
-      return null;
-  }
-}
-
 export async function createStudent(name: string, email: string, barcode: string, tableNumber?: string, seatNumber?: string) {
   try {
     console.log('Creating student:', { name, email, barcode });
@@ -222,9 +104,7 @@ export async function createStudent(name: string, email: string, barcode: string
           barcode,
           table_number: tableNumber,
           seat_number: seatNumber,
-          checked_in: false,
-          current_status: 'NEVER_ENTERED',
-          total_time_spent: '0 seconds'
+          checked_in: false
         }
       ])
       .select()

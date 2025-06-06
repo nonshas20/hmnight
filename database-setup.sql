@@ -8,11 +8,6 @@ CREATE TABLE students (
   seat_number TEXT,
   checked_in BOOLEAN DEFAULT FALSE,
   checked_in_at TIMESTAMP WITH TIME ZONE,
-  -- New time tracking columns
-  time_in TIMESTAMP WITH TIME ZONE,
-  time_out TIMESTAMP WITH TIME ZONE,
-  current_status TEXT DEFAULT 'NEVER_ENTERED' CHECK (current_status IN ('NEVER_ENTERED', 'IN', 'OUT')),
-  total_time_spent INTERVAL DEFAULT '0 seconds',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -22,11 +17,6 @@ CREATE INDEX idx_students_barcode ON students(barcode);
 -- Create index for faster name and email searches
 CREATE INDEX idx_students_name ON students(name);
 CREATE INDEX idx_students_email ON students(email);
-
--- Create indexes for time tracking
-CREATE INDEX idx_students_current_status ON students(current_status);
-CREATE INDEX idx_students_time_in ON students(time_in);
-CREATE INDEX idx_students_time_out ON students(time_out);
 
 -- Enable Row Level Security
 ALTER TABLE students ENABLE ROW LEVEL SECURITY;

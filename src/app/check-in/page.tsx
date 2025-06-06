@@ -4,24 +4,21 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
-import { getStudents, getStudentByBarcode, checkInStudent, toggleStudentTimeStatus, timeInStudent, timeOutStudent } from '@/lib/supabase';
+import { getStudents, getStudentByBarcode, checkInStudent } from '@/lib/supabase';
 import { useAppStore } from '@/lib/store';
 import { Student } from '@/lib/supabase';
 import AdvancedBarcodeScanner from '@/components/AdvancedBarcodeScanner';
-import CameraTroubleshootingGuide from '@/components/CameraTroubleshootingGuide';
 import { useAuth } from '@/contexts/AuthContext';
 import { CameraIcon, SearchIcon, CheckIcon, XIcon } from '@/components/Icons';
-import { formatTime12Hour, getStatusDisplay, calculateTimeSpent } from '@/utils/time';
+import { formatTime12Hour } from '@/utils/time';
 
 export default function CheckInPage() {
   const { students, filteredStudents, addStudent, updateStudent, setSearchQuery: setStoreSearchQuery } = useAppStore();
   const [mode, setMode] = useState<'scan' | 'manual'>('scan');
-  const [activeTab, setActiveTab] = useState<'time-in' | 'time-out'>('time-in');
   const [searchQuery, setLocalSearchQuery] = useState('');
   const [lastScannedStudent, setLastScannedStudent] = useState<Student | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSearching, setIsSearching] = useState(false);
-  const [showTroubleshooting, setShowTroubleshooting] = useState(false);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const { isLoggedIn, loading } = useAuth();
   const router = useRouter();
@@ -111,11 +108,6 @@ export default function CheckInPage() {
   const handleScanError = (error: string) => {
     console.error('Scan error:', error);
     toast.error(error);
-
-    // Show troubleshooting guide for camera permission errors
-    if (error.toLowerCase().includes('camera') || error.toLowerCase().includes('permission')) {
-      setShowTroubleshooting(true);
-    }
   };
 
   const handleScan = async (barcode: string) => {
@@ -161,7 +153,6 @@ export default function CheckInPage() {
           email: 'demo@example.com',
           barcode: barcode,
           checked_in: false,
-          current_status: 'NEVER_ENTERED',
           created_at: new Date().toISOString()
         };
 
@@ -170,71 +161,52 @@ export default function CheckInPage() {
         toast.success('Created demo student for testing');
       }
 
-      // Determine action based on active tab
-      const statusDisplay = getStatusDisplay(student.current_status);
-      const actionText = activeTab === 'time-out' ? 'Time Out' : 'Time In';
-
-      // Check if student has already completed their cycle
-      if (student.current_status === 'OUT') {
-        toast.error(`${student.name} has already completed their entry/exit cycle!`);
+      if (student.checked_in) {
+        // Use toast.id to prevent duplicate toasts
+        toast.error(`${student.name} is already checked in!`, { id: `already-checked-in-${student.id}` });
         setLastScannedStudent(student);
-        return;
-      }
+      } else {
+        try {
+          // Try to check in the student in the database
+          const updatedStudent = await checkInStudent(student.id);
 
-      // Validate the scan against the active tab
-      if (activeTab === 'time-in' && student.current_status === 'IN') {
-        toast.error(`${student.name} is already inside! Switch to Time Out mode to check them out.`);
-        setLastScannedStudent(student);
-        return;
-      }
+          if (updatedStudent) {
+            console.log('Student checked in successfully in database');
+            updateStudent(updatedStudent);
+            setLastScannedStudent(updatedStudent);
+            toast.success(`${updatedStudent.name} checked in successfully!`);
+          } else {
+            // If database update fails, still update the UI for demo
+            console.log('Database update failed, updating UI only');
+            const localUpdatedStudent = {
+              ...student,
+              checked_in: true,
+              checked_in_at: new Date().toISOString()
+            };
+            updateStudent(localUpdatedStudent);
+            setLastScannedStudent(localUpdatedStudent);
+            toast.success(`${student.name} checked in successfully (UI only)!`);
+          }
+        } catch (checkInError) {
+          console.error('Error checking in student:', checkInError);
 
-      if (activeTab === 'time-in' && (student.current_status as any) === 'OUT') {
-        toast.error(`${student.name} has already completed their cycle! They cannot be checked in again.`);
-        setLastScannedStudent(student);
-        return;
-      }
+          // Still update the UI for demo purposes
+          const localUpdatedStudent = {
+            ...student,
+            checked_in: true,
+            checked_in_at: new Date().toISOString()
+          };
+          updateStudent(localUpdatedStudent);
+          setLastScannedStudent(localUpdatedStudent);
 
-      if (activeTab === 'time-out' && student.current_status === 'NEVER_ENTERED') {
-        toast.error(`${student.name} has never entered! Switch to Time In mode to check them in first.`);
-        setLastScannedStudent(student);
-        return;
-      }
+          // Force re-render of the filtered students list
+          if (searchQuery) {
+            // Re-apply the search to refresh the filtered list
+            setStoreSearchQuery(searchQuery);
+          }
 
-      if (activeTab === 'time-out' && (student.current_status as any) === 'OUT') {
-        toast.error(`${student.name} has already been checked out! They have completed their cycle.`);
-        setLastScannedStudent(student);
-        return;
-      }
-
-      try {
-        // Use specific functions based on active tab instead of toggle
-        let updatedStudent;
-        if (activeTab === 'time-in') {
-          updatedStudent = await timeInStudent(student.id);
-        } else {
-          updatedStudent = await timeOutStudent(student.id);
+          toast.success(`${student.name} marked as checked in (UI only)`);
         }
-
-        if (updatedStudent && !(updatedStudent as any).error) {
-          console.log('Student time status updated successfully in database');
-          updateStudent(updatedStudent);
-          setLastScannedStudent(updatedStudent);
-
-          const newStatusDisplay = getStatusDisplay(updatedStudent.current_status);
-          toast.success(`${updatedStudent.name} - ${actionText} successful! Status: ${newStatusDisplay.text}`);
-        } else if ((updatedStudent as any)?.error === 'ALREADY_COMPLETED') {
-          toast.error(`${student.name} has already completed their entry/exit cycle!`);
-          setLastScannedStudent(student);
-        } else {
-          // Database update failed - show error and don't update UI
-          console.error('Database update failed for student:', student.id);
-          toast.error(`Failed to update ${student.name} in database. Please try again.`);
-          setLastScannedStudent(student);
-        }
-      } catch (error) {
-        console.error('Error updating student time status:', error);
-        toast.error(`Failed to update ${student.name}. Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        setLastScannedStudent(student);
       }
     } catch (error) {
       console.error('Scan error:', error);
@@ -242,40 +214,18 @@ export default function CheckInPage() {
     }
   };
 
-  const handleManualCheckIn = async (student: Student, forceAction?: 'time-in' | 'time-out') => {
-    const requestedAction = forceAction || activeTab;
-    const actionText = requestedAction === 'time-out' ? 'Time Out' : 'Time In';
-
-    // Check if student has already completed their cycle
-    if (student.current_status === 'OUT') {
-      toast.error(`${student.name} has already completed their entry/exit cycle!`);
+  const handleManualCheckIn = async (student: Student) => {
+    if (student.checked_in) {
+      toast.error(`${student.name} is already checked in!`);
       return;
     }
-
-    // Validate the requested action against current status
-    if (requestedAction === 'time-in' && student.current_status === 'IN') {
-      toast.error(`${student.name} is already inside! Use Time Out tab to check them out.`);
-      return;
-    }
-
-    if (requestedAction === 'time-out' && student.current_status !== 'IN') {
-      toast.error(`${student.name} is not inside! Use Time In tab to check them in first.`);
-      return;
-    }
-
-    // Show loading toast
-    const loadingToast = toast.loading(`${actionText} ${student.name}...`);
 
     // Immediately update UI for better user experience
-    const now = new Date().toISOString();
     const localUpdatedStudent = {
       ...student,
       checked_in: true,
-      checked_in_at: now,
-      current_status: student.current_status === 'IN' ? 'OUT' : 'IN',
-      time_in: student.current_status !== 'IN' ? now : student.time_in,
-      time_out: student.current_status === 'IN' ? now : student.time_out
-    } as Student;
+      checked_in_at: new Date().toISOString()
+    };
 
     // Update UI immediately for responsive feedback
     updateStudent(localUpdatedStudent);
@@ -287,17 +237,20 @@ export default function CheckInPage() {
       setStoreSearchQuery(searchQuery);
     }
 
-    try {
-      console.log('Updating student time status manually:', student);
+    // Show loading toast
+    const loadingToast = toast.loading(`Checking in ${student.name}...`);
 
-      // Try to update in database using new time tracking function
-      const updatedStudent = await toggleStudentTimeStatus(student.id);
+    try {
+      console.log('Checking in student manually:', student);
+
+      // Try to update in database
+      const updatedStudent = await checkInStudent(student.id);
 
       // Dismiss loading toast
       toast.dismiss(loadingToast);
 
-      if (updatedStudent && !(updatedStudent as any).error) {
-        console.log('Student time status updated successfully:', updatedStudent);
+      if (updatedStudent) {
+        console.log('Student checked in successfully:', updatedStudent);
         // Update with the data from the server to ensure consistency
         updateStudent(updatedStudent);
         setLastScannedStudent(updatedStudent);
@@ -308,8 +261,7 @@ export default function CheckInPage() {
           setStoreSearchQuery(searchQuery);
         }
 
-        const newStatusDisplay = getStatusDisplay(updatedStudent.current_status);
-        toast.success(`${updatedStudent.name} - ${actionText} successful! Status: ${newStatusDisplay.text}`);
+        toast.success(`${updatedStudent.name} checked in successfully!`);
 
         // Play success sound
         try {
@@ -319,28 +271,19 @@ export default function CheckInPage() {
         } catch (e) {
           console.log('Sound playback not supported, continuing anyway');
         }
-      } else if ((updatedStudent as any)?.error === 'ALREADY_COMPLETED') {
-        toast.error(`${student.name} has already completed their entry/exit cycle!`);
-        // Revert UI changes
-        updateStudent(student);
-        setLastScannedStudent(student);
       } else {
-        // Database update failed - revert UI changes and show error
-        console.error('Database update failed for student:', student.id);
-        updateStudent(student);
-        setLastScannedStudent(student);
-        toast.error(`Failed to update ${student.name} in database. Please try again.`);
+        // If database update fails, we already updated the UI
+        console.log('Database update failed, UI already updated');
+        toast.success(`${student.name} checked in successfully (UI only)!`);
       }
     } catch (error) {
-      console.error('Time tracking error:', error);
+      console.error('Check-in error:', error);
       // Dismiss loading toast
       toast.dismiss(loadingToast);
+      toast.error('Error checking in student: ' + (error instanceof Error ? error.message : 'Unknown error'));
 
-      // Revert UI changes
-      updateStudent(student);
-      setLastScannedStudent(student);
-
-      toast.error(`Failed to update ${student.name}. Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      // We already updated the UI, so just inform the user
+      toast.success(`${student.name} marked as checked in (UI only)`);
     }
   };
 
@@ -397,74 +340,20 @@ export default function CheckInPage() {
                 </p>
               </div>
 
-              {/* Time In/Time Out Tabs for Scanner */}
-              <div className="flex justify-center mb-6">
-                <div className="bg-gray-100 dark:bg-gray-700 rounded-lg p-1 border border-gray-200 dark:border-gray-600">
-                  <button
-                    className={`px-6 py-2 rounded text-sm font-medium flex items-center gap-2 ${
-                      activeTab === 'time-in'
-                        ? 'bg-green-500 text-white shadow-sm'
-                        : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                    }`}
-                    onClick={() => setActiveTab('time-in')}
-                  >
-                    <CheckIcon className="h-4 w-4" />
-                    Time In Mode
-                  </button>
-                  <button
-                    className={`px-6 py-2 rounded text-sm font-medium flex items-center gap-2 ${
-                      activeTab === 'time-out'
-                        ? 'bg-red-500 text-white shadow-sm'
-                        : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                    }`}
-                    onClick={() => setActiveTab('time-out')}
-                  >
-                    <XIcon className="h-4 w-4" />
-                    Time Out Mode
-                  </button>
-                </div>
-              </div>
-
-              <div className="text-center mb-4">
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  {activeTab === 'time-in'
-                    ? '🟢 Scanner will only TIME IN students (Never Entered → Inside)'
-                    : '🔴 Scanner will only TIME OUT students (Inside → Completed)'
-                  }
-                </p>
-              </div>
-
               <AdvancedBarcodeScanner
                 onScan={handleScanSuccess}
                 onError={handleScanError}
                 isActive={mode === 'scan'}
               />
 
-              <div className="text-center mt-6 space-y-3">
-                <div className="flex justify-center space-x-3">
-                  <button
-                    onClick={() => setMode('manual')}
-                    className="bg-secondary text-white px-6 py-3 rounded font-medium hover:bg-secondary-dark flex items-center gap-2"
-                  >
-                    <SearchIcon className="h-4 w-4" />
-                    Switch to Manual Mode
-                  </button>
-
-                  <button
-                    onClick={() => setShowTroubleshooting(true)}
-                    className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-3 rounded font-medium flex items-center gap-2"
-                    title="Camera troubleshooting help"
-                  >
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                    </svg>
-                    Help
-                  </button>
-                </div>
-
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Having camera issues? Click "Help" for troubleshooting steps
-                </p>
+              <div className="text-center mt-6">
+                <button
+                  onClick={() => setMode('manual')}
+                  className="bg-secondary text-white px-6 py-3 rounded font-medium hover:bg-secondary-dark flex items-center gap-2 mx-auto"
+                >
+                  <SearchIcon className="h-4 w-4" />
+                  Switch to Manual Mode
+                </button>
               </div>
 
               {lastScannedStudent && (
@@ -477,36 +366,22 @@ export default function CheckInPage() {
                     </p>
                     <p className="flex justify-between">
                       <span className="text-gray-600 dark:text-gray-300">Status:</span>
-                      {(() => {
-                        const statusDisplay = getStatusDisplay(lastScannedStudent.current_status || 'NEVER_ENTERED');
-                        return (
-                          <span className={`px-2 py-1 text-xs font-semibold rounded-full ${statusDisplay.color} flex items-center gap-1`}>
-                            {lastScannedStudent.current_status === 'IN' ? (
-                              <CheckIcon className="h-3 w-3" />
-                            ) : (
-                              <XIcon className="h-3 w-3" />
-                            )}
-                            {statusDisplay.text}
-                          </span>
-                        );
-                      })()}
+                      {lastScannedStudent.checked_in ? (
+                        <span className="text-green-600 font-medium flex items-center gap-1">
+                          <CheckIcon className="h-4 w-4" />
+                          Checked In
+                        </span>
+                      ) : (
+                        <span className="text-red-600 font-medium flex items-center gap-1">
+                          <XIcon className="h-4 w-4" />
+                          Not Checked In
+                        </span>
+                      )}
                     </p>
-                    {lastScannedStudent.time_in && (
+                    {lastScannedStudent.checked_in_at && (
                       <p className="flex justify-between">
-                        <span className="text-gray-600 dark:text-gray-300">Time In:</span>
-                        <span className="font-medium text-gray-900 dark:text-white">{formatTime12Hour(lastScannedStudent.time_in)}</span>
-                      </p>
-                    )}
-                    {lastScannedStudent.time_out && (
-                      <p className="flex justify-between">
-                        <span className="text-gray-600 dark:text-gray-300">Time Out:</span>
-                        <span className="font-medium text-gray-900 dark:text-white">{formatTime12Hour(lastScannedStudent.time_out)}</span>
-                      </p>
-                    )}
-                    {lastScannedStudent.current_status === 'IN' && lastScannedStudent.time_in && (
-                      <p className="flex justify-between">
-                        <span className="text-gray-600 dark:text-gray-300">Current Session:</span>
-                        <span className="font-medium text-blue-600">{calculateTimeSpent(lastScannedStudent.time_in)}</span>
+                        <span className="text-gray-600 dark:text-gray-300">Time:</span>
+                        <span className="font-medium text-gray-900 dark:text-white">{formatTime12Hour(lastScannedStudent.checked_in_at)}</span>
                       </p>
                     )}
                   </div>
@@ -519,43 +394,6 @@ export default function CheckInPage() {
                 <h2 className="text-2xl font-bold mb-2 text-gray-900 dark:text-white">Manual Check-in</h2>
                 <p className="text-gray-600 dark:text-gray-300">
                   Search for students by name or email
-                </p>
-              </div>
-
-              {/* Time In/Time Out Tabs */}
-              <div className="flex justify-center mb-6">
-                <div className="bg-gray-100 dark:bg-gray-700 rounded-lg p-1 border border-gray-200 dark:border-gray-600">
-                  <button
-                    className={`px-6 py-2 rounded text-sm font-medium flex items-center gap-2 ${
-                      activeTab === 'time-in'
-                        ? 'bg-green-500 text-white shadow-sm'
-                        : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                    }`}
-                    onClick={() => setActiveTab('time-in')}
-                  >
-                    <CheckIcon className="h-4 w-4" />
-                    Time In
-                  </button>
-                  <button
-                    className={`px-6 py-2 rounded text-sm font-medium flex items-center gap-2 ${
-                      activeTab === 'time-out'
-                        ? 'bg-red-500 text-white shadow-sm'
-                        : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                    }`}
-                    onClick={() => setActiveTab('time-out')}
-                  >
-                    <XIcon className="h-4 w-4" />
-                    Time Out
-                  </button>
-                </div>
-              </div>
-
-              <div className="text-center mb-4">
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  {activeTab === 'time-in'
-                    ? 'Showing students who can be checked in (Not Entered status)'
-                    : 'Showing students who can be checked out (Inside status)'
-                  }
                 </p>
               </div>
 
@@ -585,10 +423,7 @@ export default function CheckInPage() {
                           Email
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                          Current Status
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                          Time Info
+                          Status
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                           Action
@@ -596,18 +431,8 @@ export default function CheckInPage() {
                       </tr>
                     </thead>
                     <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                      {(() => {
-                        // Filter students based on active tab
-                        const tabFilteredStudents = filteredStudents.filter(student => {
-                          if (activeTab === 'time-in') {
-                            return student.current_status === 'NEVER_ENTERED';
-                          } else {
-                            return student.current_status === 'IN';
-                          }
-                        });
-
-                        return tabFilteredStudents.length > 0 ?
-                          tabFilteredStudents.map((student) => (
+                      {filteredStudents.length > 0 ? (
+                        filteredStudents.map((student) => (
                           <tr key={student.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
                               {student.name}
@@ -616,77 +441,57 @@ export default function CheckInPage() {
                               {student.email}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm">
-                              {(() => {
-                                const statusDisplay = getStatusDisplay(student.current_status || 'NEVER_ENTERED');
-                                return (
-                                  <span className={`px-2 py-1 text-xs font-semibold rounded-full ${statusDisplay.color} flex items-center gap-1`}>
-                                    {student.current_status === 'IN' ? (
-                                      <CheckIcon className="h-3 w-3" />
-                                    ) : (
-                                      <XIcon className="h-3 w-3" />
-                                    )}
-                                    {statusDisplay.text}
-                                  </span>
-                                );
-                              })()}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-xs text-gray-500 dark:text-gray-300">
-                              <div className="space-y-1">
-                                {student.time_in && (
-                                  <div>In: {formatTime12Hour(student.time_in)}</div>
-                                )}
-                                {student.time_out && (
-                                  <div>Out: {formatTime12Hour(student.time_out)}</div>
-                                )}
-                                {student.current_status === 'IN' && student.time_in && (
-                                  <div className="text-blue-600">
-                                    Current: {calculateTimeSpent(student.time_in)}
-                                  </div>
-                                )}
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm">
-                              {student.current_status === 'OUT' ? (
-                                <span className="px-4 py-2 rounded text-gray-500 text-sm bg-gray-200 dark:bg-gray-700 dark:text-gray-400">
-                                  Cycle Complete
+                              {student.checked_in ? (
+                                <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100 flex items-center gap-1">
+                                  <CheckIcon className="h-3 w-3" />
+                                  Checked In
+                                  {student.checked_in_at && (
+                                    <span className="ml-1 opacity-70">
+                                      {formatTime12Hour(student.checked_in_at)}
+                                    </span>
+                                  )}
                                 </span>
                               ) : (
-                                <button
-                                  onClick={() => handleManualCheckIn(student, activeTab)}
-                                  className={`px-4 py-2 rounded text-white text-sm ${
-                                    activeTab === 'time-in'
-                                      ? 'bg-green-500 hover:bg-green-600'
-                                      : 'bg-red-500 hover:bg-red-600'
-                                  }`}
-                                >
-                                  {activeTab === 'time-in' ? 'Time In' : 'Time Out'}
-                                </button>
+                                <span className="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100 flex items-center gap-1">
+                                  <XIcon className="h-3 w-3" />
+                                  Not Checked In
+                                </span>
                               )}
                             </td>
-                          </tr>
-                        )) : isSearching ? (
-                          <tr>
-                            <td colSpan={5} className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
-                              Searching...
+                            <td className="px-6 py-4 whitespace-nowrap text-sm">
+                              <button
+                                onClick={() => handleManualCheckIn(student)}
+                                disabled={student.checked_in}
+                                className={`px-4 py-2 rounded text-white text-sm ${
+                                  student.checked_in
+                                    ? 'bg-gray-400 cursor-not-allowed'
+                                    : 'bg-primary hover:bg-primary-dark'
+                                }`}
+                              >
+                                {student.checked_in ? 'Already Checked In' : 'Check In'}
+                              </button>
                             </td>
                           </tr>
-                        ) : searchQuery ? (
-                          <tr>
-                            <td colSpan={5} className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
-                              No students found matching "{searchQuery}" for {activeTab === 'time-in' ? 'Time In' : 'Time Out'}
-                            </td>
-                          </tr>
-                        ) : (
-                          <tr>
-                            <td colSpan={5} className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
-                              {activeTab === 'time-in'
-                                ? 'No students available for Time In. Search for students who haven\'t entered yet.'
-                                : 'No students currently inside. Switch to Time In tab to check students in first.'
-                              }
-                            </td>
-                          </tr>
-                        );
-                      })()}
+                        ))
+                      ) : isSearching ? (
+                        <tr>
+                          <td colSpan={4} className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                            Searching...
+                          </td>
+                        </tr>
+                      ) : searchQuery ? (
+                        <tr>
+                          <td colSpan={4} className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                            No students found matching "{searchQuery}"
+                          </td>
+                        </tr>
+                      ) : (
+                        <tr>
+                          <td colSpan={4} className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                            Enter a search term to find students
+                          </td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -705,12 +510,6 @@ export default function CheckInPage() {
           )}
         </div>
       </div>
-
-      {/* Camera Troubleshooting Guide */}
-      <CameraTroubleshootingGuide
-        isOpen={showTroubleshooting}
-        onClose={() => setShowTroubleshooting(false)}
-      />
     </div>
   );
 }
